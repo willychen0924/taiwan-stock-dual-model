@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { SpreadsheetFile, Workbook } from "@oai/artifact-tool";
+import { loadEnrichment } from "./report_enrichment.mjs";
 
 
 const inputPath = process.argv[2] ?? "reports/latest/screening_results.json";
@@ -10,6 +11,7 @@ const outputPath = process.argv[3] ?? "outputs/latest/台股價值篩選.xlsx";
 const root = process.cwd();
 const payload = JSON.parse(await fs.readFile(inputPath, "utf8"));
 const { metadata: meta, config, checks, results } = payload;
+const enrichment = await loadEnrichment(root, meta.as_of);
 const MILLION = 1_000_000;
 const HUNDRED_MILLION = 100_000_000;
 
@@ -89,11 +91,11 @@ function setColumnWidth(sheet, column, lastRow, width) {
 }
 
 function linearFormula(cell, floorRef, targetRef, points) {
-  return `IF(OR(${cell}="",NOT(ISNUMBER(${cell}))),0,${points}*MAX(0,MIN(1,(${cell}-${floorRef})/(${targetRef}-${floorRef}))))`;
+  return `IF(NOT(ISNUMBER(${cell})),0,${points}*MAX(0,MIN(1,(${cell}-${floorRef})/(${targetRef}-${floorRef}))))`;
 }
 
 function descendingFormula(cell, bestRef, worstRef, points) {
-  return `IF(OR(${cell}="",NOT(ISNUMBER(${cell}))),0,${points}*MAX(0,MIN(1,(${worstRef}-${cell})/(${worstRef}-${bestRef}))))`;
+  return `IF(NOT(ISNUMBER(${cell})),0,${points}*MAX(0,MIN(1,(${worstRef}-${cell})/(${worstRef}-${bestRef}))))`;
 }
 
 // 模型說明
@@ -471,34 +473,35 @@ setColumnWidth(dashboard, "K", 36, 13);
 for (const col of ["L", "M", "N", "O", "P", "Q"]) setColumnWidth(dashboard, col, 36, 12);
 
 // 人工複核
-titleBand(review, "A1:L1", "精華 20 人工質化複核");
-review.getRange("A2:L2").merge();
+titleBand(review, "A1:N1", "精華 20 人工質化複核");
+review.getRange("A2:N2").merge();
 review.getRange("A2").values = [["模型短評由量化欄位自動產生；黃色藍字欄位可編輯，但要永久保存請同步更新 config/manual_review.csv。治理誠信是否決條件，不以高分抵銷。"]];
 review.getRange("A2").format = { fill: colors.yellow, font: { color: "#7C2D12" }, wrapText: true };
-review.getRange("A5:L5").values = [["排名", "代碼", "公司", "產業", "總分", "治理狀態", "新動能／催化", "人工排除", "複核筆記", "模型短評（自動）", "量化狀態", "質化結論"]];
-formatHeader(review.getRange("A5:L5"));
+review.getRange("A5:N5").values = [["排名", "代碼", "公司", "產業", "總分", "治理狀態", "新動能／催化", "技術面", "籌碼面", "人工排除", "複核筆記", "模型短評（自動）", "量化狀態", "質化結論"]];
+formatHeader(review.getRange("A5:N5"));
 if (focusRows.length) {
   const reviewValues = focusRows.map((row) => [
     row.rank, row.stock_id, row.stock_name, row.industry, row.total_score, row.governance_status,
-    row.catalyst, row.manual_exclude ? "是" : "否", row.manual_notes, row.model_summary, "量化硬門檻通過", null,
+    row.catalyst, enrichment[row.stock_id]?.technical ?? "—", enrichment[row.stock_id]?.chip ?? "—",
+    row.manual_exclude ? "是" : "否", row.manual_notes, row.model_summary, "量化硬門檻通過", null,
   ]);
   const reviewLastRow = 5 + reviewValues.length;
-  review.getRange(`A6:L${reviewLastRow}`).values = reviewValues;
-  review.getRange(`L6:L${reviewLastRow}`).formulas = focusRows.map((_, index) => {
+  review.getRange(`A6:N${reviewLastRow}`).values = reviewValues;
+  review.getRange(`N6:N${reviewLastRow}`).formulas = focusRows.map((_, index) => {
     const r = 6 + index;
     return [`=IF(F${r}="否決","排除",IF(AND(F${r}="通過",G${r}<>""),"可進深度研究","待完成質化"))`];
   });
   review.getRange(`E6:E${reviewLastRow}`).format.numberFormat = "0.0";
-  review.getRange(`F6:I${reviewLastRow}`).format = { fill: colors.yellow, font: { color: colors.blue }, wrapText: true };
-  review.getRange(`J6:J${reviewLastRow}`).format = { fill: colors.lightBlue, font: { color: colors.black }, wrapText: true, verticalAlignment: "center" };
-  review.getRange(`J6:J${reviewLastRow}`).format.rowHeight = 38;
-  review.getRange(`L6:L${reviewLastRow}`).format.font = { color: colors.black, bold: true };
+  review.getRange(`F6:K${reviewLastRow}`).format = { fill: colors.yellow, font: { color: colors.blue }, wrapText: true };
+  review.getRange(`L6:L${reviewLastRow}`).format = { fill: colors.lightBlue, font: { color: colors.black }, wrapText: true, verticalAlignment: "center" };
+  review.getRange(`L6:L${reviewLastRow}`).format.rowHeight = 38;
+  review.getRange(`N6:N${reviewLastRow}`).format.font = { color: colors.black, bold: true };
   review.getRange(`F6:F${reviewLastRow}`).dataValidation = { rule: { type: "list", values: ["待複核", "通過", "否決"] } };
-  review.getRange(`H6:H${reviewLastRow}`).dataValidation = { rule: { type: "list", values: ["否", "是"] } };
-  review.getRange(`A5:L${reviewLastRow}`).format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
+  review.getRange(`J6:J${reviewLastRow}`).dataValidation = { rule: { type: "list", values: ["否", "是"] } };
+  review.getRange(`A5:N${reviewLastRow}`).format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
 }
 review.freezePanes.freezeRows(5);
-const reviewWidths = { A: 8, B: 9, C: 14, D: 15, E: 10, F: 13, G: 26, H: 12, I: 30, J: 52, K: 18, L: 18 };
+const reviewWidths = { A: 8, B: 9, C: 14, D: 15, E: 10, F: 13, G: 26, H: 24, I: 24, J: 12, K: 30, L: 52, M: 18, N: 18 };
 for (const [col, width] of Object.entries(reviewWidths)) setColumnWidth(review, col, 30, width);
 
 // 檢核
@@ -612,10 +615,10 @@ const explanationCheck = await workbook.inspect({
 console.log("[QA] model explanation", explanationCheck.ndjson);
 const reviewCheck = await workbook.inspect({
   kind: "table",
-  range: `人工複核!A1:L${Math.min(5 + focusSize, 12)}`,
+  range: `人工複核!A1:N${Math.min(5 + focusSize, 12)}`,
   include: "values,formulas",
   tableMaxRows: 12,
-  tableMaxCols: 12,
+  tableMaxCols: 14,
   maxChars: 7000,
 });
 console.log("[QA] manual review", reviewCheck.ndjson);
@@ -638,7 +641,7 @@ const renderSpecs = [
   ["試算稽核", `A1:V${auditLastRow}`, "audit_left.png"],
   ["試算稽核", `W1:AS${auditLastRow}`, "audit_right.png"],
   ["圖表資料", `A1:D${Math.max(8, 3 + chartRowCount)}`, "chart_data.png"],
-  ["人工複核", `A1:L${Math.max(12, 5 + focusSize)}`, "manual_review.png"],
+  ["人工複核", `A1:N${Math.max(12, 5 + focusSize)}`, "manual_review.png"],
   ["參數", "A1:E47", "assumptions.png"],
   ["檢核", `A1:G${5 + checks.length}`, "checks.png"],
   ["資料來源", "A1:F14", "sources.png"],

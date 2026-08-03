@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from value_screener.config import load_config  # noqa: E402
+from value_screener.combined_report import write_combined_report  # noqa: E402
+from value_screener.enrichment import load_enrichment  # noqa: E402
 from value_screener.finmind import load_dotenv  # noqa: E402
 from value_screener.momentum import build_momentum_result, load_momentum_config  # noqa: E402
 from value_screener.momentum_report import write_momentum_reports  # noqa: E402
@@ -44,7 +46,13 @@ def main() -> int:
         include_as_of=args.include_as_of,
     )
     history_path = ROOT / "data" / "processed" / "rankings_history.jsonl"
-    paths = write_reports(result, ROOT / "reports", history_path=history_path)
+    enrichment = load_enrichment(ROOT, str(result["metadata"]["as_of"]))
+    paths = write_reports(
+        result,
+        ROOT / "reports",
+        history_path=history_path,
+        enrichment=enrichment,
+    )
     print("[完成] 全市場篩選", flush=True)
     for name, path in paths.items():
         print(f"[輸出] {name}: {path}", flush=True)
@@ -54,10 +62,19 @@ def main() -> int:
         momentum_result,
         ROOT / "reports" / "momentum",
         history_path=history_path,
+        enrichment=enrichment,
     )
     print("[完成] 營運動能篩選", flush=True)
     for name, path in momentum_paths.items():
         print(f"[輸出] momentum_{name}: {path}", flush=True)
+    combined_paths = write_combined_report(
+        result,
+        momentum_result,
+        ROOT / "reports",
+        enrichment=enrichment,
+    )
+    for name, path in combined_paths.items():
+        print(f"[輸出] combined_{name}: {path}", flush=True)
     return 0
 
 

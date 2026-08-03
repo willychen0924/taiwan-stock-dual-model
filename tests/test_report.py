@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from value_screener.report import (  # noqa: E402
     SUMMARY_MAX_CHARS,
     SUMMARY_MIN_CHARS,
+    _build_html,
     build_model_summary,
 )
 
@@ -52,6 +53,62 @@ class ModelSummaryTests(unittest.TestCase):
         self.assertIn("未通過硬門檻", summary)
         self.assertIn("成交金額不足", summary)
         self.assertNotIn("買進", summary)
+
+    def test_html_has_score_bars_collapsed_watchlist_and_sorting(self) -> None:
+        results = []
+        for rank in range(1, 22):
+            results.append(
+                {
+                    "rank": rank,
+                    "stock_id": f"{rank:04d}",
+                    "stock_name": f"公司{rank}",
+                    "industry": "測試業",
+                    "hard_pass": True,
+                    "total_score": 70.0,
+                    "defense_score": 40.0,
+                    "valuation_score": 20.0,
+                    "momentum_score": 10.0,
+                    "per": 12.0,
+                    "net_cash_ratio": 0.2,
+                    "liquidation_coverage": 0.3,
+                    "revenue_3m_yoy": 0.1,
+                    "model_summary": "僅供研究篩選，仍須公開資訊查證。",
+                    "governance_status": "待複核",
+                }
+            )
+        payload = {
+            "metadata": {
+                "model_status": "OK",
+                "as_of": "2026-08-03",
+                "latest_market_date": "2026-07-31",
+                "latest_financial_quarter": "2026-03-31",
+                "latest_revenue_period": "2026-06",
+                "universe_count": 21,
+                "operating_company_count": 21,
+                "hard_pass_count": 21,
+                "watchlist_count": 21,
+                "focus_count": 20,
+                "revenue_signal_coverage": {
+                    "signal_key": "revenue_3m_yoy",
+                    "signal_label": "3M月營收年增率",
+                    "ranked": 1.0,
+                    "universe": 1.0,
+                    "threshold": 0.8,
+                },
+            },
+            "config": {"report": {"focus_size": 20, "watchlist_size": 100}},
+            "checks": [],
+            "results": results,
+        }
+        page = _build_html(
+            payload,
+            enrichment={"0001": {"technical": "中性", "chip": "待觀察"}},
+        )
+        self.assertIn("scorebar", page)
+        self.assertIn("展開自選100第 21–100 名（1 檔）", page)
+        self.assertIn("data-sort", page)
+        self.assertIn("中性", page)
+        self.assertNotIn("cdn", page.lower())
 
 
 if __name__ == "__main__":

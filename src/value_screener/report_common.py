@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-def _current_comparability(result: dict[str, Any]) -> tuple[bool, str]:
+def current_report_comparability(result: dict[str, Any]) -> tuple[bool, str]:
     metadata = result.get("metadata", {})
     if str(metadata.get("model_status") or "UNKNOWN") != "OK":
         return False, f"模型狀態為 {metadata.get('model_status') or 'UNKNOWN'}"
@@ -30,7 +30,7 @@ def load_rank_comparison(
     history_path: Path | None,
 ) -> dict[str, Any]:
     """Select the latest earlier eligible market observation for rank comparison."""
-    comparable, reason = _current_comparability(result)
+    comparable, reason = current_report_comparability(result)
     comparison: dict[str, Any] = {
         "comparable": comparable,
         "reason": reason,
@@ -162,3 +162,67 @@ def build_freshness_banner(metadata: dict[str, Any]) -> str:
         f'<div class="{css_class}">營收期 {html.escape(str(metadata.get("latest_revenue_period") or "—"))}'
         f"｜排名母體{label}覆蓋 {ranked:.1%}｜一般公司覆蓋 {universe:.1%}{warning}</div>"
     )
+
+
+def sortable_cell(display: str, sort_value: Any, *, css_class: str = "") -> str:
+    class_attribute = f' class="{html.escape(css_class)}"' if css_class else ""
+    raw = "" if sort_value is None else str(sort_value)
+    return f'<td{class_attribute} data-sort="{html.escape(raw, quote=True)}">{display}</td>'
+
+
+def score_composition_bar(segments: list[tuple[str, float | None, str]]) -> str:
+    normalized: list[tuple[str, float, str]] = []
+    total = 0.0
+    for label, raw_value, css_class in segments:
+        value = max(0.0, float(raw_value or 0.0))
+        normalized.append((label, value, css_class))
+        total += value
+    remainder = max(0.0, 100.0 - total)
+    parts = [
+        (
+            f'<span class="score-segment {html.escape(css_class)}" style="width:{min(value, 100.0):.4f}%" '
+            f'title="{html.escape(label, quote=True)} {value:.1f}"></span>'
+        )
+        for label, value, css_class in normalized
+    ]
+    parts.append(
+        f'<span class="score-segment score-remainder" style="width:{remainder:.4f}%" title="未配置 {remainder:.1f}"></span>'
+    )
+    label = "／".join(f"{name} {value:.1f}" for name, value, _ in normalized)
+    return (
+        f'<div class="scorebar" role="img" aria-label="{html.escape(label, quote=True)}">'
+        f"{''.join(parts)}</div>"
+    )
+
+
+def sortable_table_script() -> str:
+    return """<script>
+document.querySelectorAll('table.sortable-table').forEach((table) => {
+  table.querySelectorAll('thead th').forEach((header, index) => {
+    header.classList.add('sortable');
+    header.tabIndex = 0;
+    header.setAttribute('role', 'button');
+    const sort = () => {
+      const numeric = header.dataset.type === 'number';
+      const ascending = header.dataset.order !== 'asc';
+      table.querySelectorAll('thead th').forEach((item) => delete item.dataset.order);
+      header.dataset.order = ascending ? 'asc' : 'desc';
+      const body = table.tBodies[0];
+      const rows = Array.from(body.rows);
+      rows.sort((left, right) => {
+        const a = left.cells[index]?.dataset.sort ?? '';
+        const b = right.cells[index]?.dataset.sort ?? '';
+        const comparison = numeric
+          ? ((Number(a) || 0) - (Number(b) || 0))
+          : a.localeCompare(b, 'zh-Hant', { numeric: true });
+        return ascending ? comparison : -comparison;
+      });
+      rows.forEach((row) => body.appendChild(row));
+    };
+    header.addEventListener('click', sort);
+    header.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); sort(); }
+    });
+  });
+});
+</script>"""
