@@ -3,7 +3,7 @@ from __future__ import annotations
 import bisect
 import math
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date
 from typing import Any, Iterable
 
@@ -205,6 +205,17 @@ def revenue_window_yoy(
     return sum(float(value) for value in current_values if value is not None) / prior_sum - 1
 
 
+def latest_complete_revenue_period(
+    revenues: dict[tuple[int, int], float],
+) -> tuple[int, int] | None:
+    """Return the latest stock-specific month with a complete 3M YoY window."""
+    for period in sorted(revenues, reverse=True):
+        current_periods = [shift_month(*period, offset) for offset in (-2, -1, 0)]
+        if revenue_window_yoy(revenues, current_periods) is not None:
+            return period
+    return None
+
+
 def _latest_rows(rows: Iterable[dict[str, Any]], allowed: set[str]) -> dict[str, dict[str, Any]]:
     output: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -337,7 +348,7 @@ def analyze(
         if year and month and revenue is not None:
             revenue_groups[stock_id][(year, month)] = revenue
             revenue_periods.add((year, month))
-    latest_revenue_period = max(revenue_periods) if revenue_periods else None
+    latest_available_revenue_period = max(revenue_periods) if revenue_periods else None
 
     ttm_quarters = last_quarters(latest_quarter, 4)
     prior_ttm_quarters = last_quarters(previous_quarter(ttm_quarters[0]), 4)
@@ -351,11 +362,16 @@ def analyze(
         recent_20 = prices[-20:]
         latest_price = prices[-1] if prices else {}
         avg_turnover = None
+        avg_volume = None
         if recent_20:
             turnovers = [as_number(row.get("Trading_money")) for row in recent_20]
             valid_turnovers = [value for value in turnovers if value is not None]
             if valid_turnovers:
                 avg_turnover = sum(valid_turnovers) / len(valid_turnovers)
+            volumes = [as_number(row.get("Trading_Volume")) for row in recent_20]
+            valid_volumes = [value for value in volumes if value is not None]
+            if valid_volumes:
+                avg_volume = sum(valid_volumes) / len(valid_volumes)
 
         balance, unknown = parse_balance(balance_groups.get(stock_id, []))
         unknown_debt_types.update(unknown)
@@ -452,15 +468,16 @@ def analyze(
         previous_revenue_3m_yoy = None
         revenue_acceleration = None
         latest_revenue_yoy = None
-        if latest_revenue_period:
-            current_periods = [shift_month(*latest_revenue_period, offset) for offset in (-2, -1, 0)]
-            previous_periods = [shift_month(*latest_revenue_period, offset) for offset in (-5, -4, -3)]
+        stock_revenue_period = latest_complete_revenue_period(revenue_groups[stock_id])
+        if stock_revenue_period:
+            current_periods = [shift_month(*stock_revenue_period, offset) for offset in (-2, -1, 0)]
+            previous_periods = [shift_month(*stock_revenue_period, offset) for offset in (-5, -4, -3)]
             revenue_3m_yoy = revenue_window_yoy(revenue_groups[stock_id], current_periods)
             previous_revenue_3m_yoy = revenue_window_yoy(revenue_groups[stock_id], previous_periods)
             if revenue_3m_yoy is not None and previous_revenue_3m_yoy is not None:
                 revenue_acceleration = revenue_3m_yoy - previous_revenue_3m_yoy
-            current_latest = revenue_groups[stock_id].get(latest_revenue_period)
-            prior_latest = revenue_groups[stock_id].get((latest_revenue_period[0] - 1, latest_revenue_period[1]))
+            current_latest = revenue_groups[stock_id].get(stock_revenue_period)
+            prior_latest = revenue_groups[stock_id].get((stock_revenue_period[0] - 1, stock_revenue_period[1]))
             if current_latest is not None and prior_latest is not None and prior_latest > 0:
                 latest_revenue_yoy = current_latest / prior_latest - 1
 
@@ -473,6 +490,7 @@ def analyze(
                 "close": as_number(latest_price.get("close")),
                 "market_value": market_value,
                 "avg_daily_turnover": avg_turnover,
+                "avg_daily_volume": avg_volume,
                 "per": as_number(per_row.get("PER")),
                 "pbr": as_number(per_row.get("PBR")),
                 "dividend_yield": as_number(per_row.get("dividend_yield")),
@@ -495,6 +513,11 @@ def analyze(
                 "prior_ttm_operating_margin": prior_operating_margin,
                 "ttm_operating_margin_change": operating_margin_change,
                 "ttm_net_income_growth": net_income_growth,
+                "revenue_period": (
+                    f"{stock_revenue_period[0]}-{stock_revenue_period[1]:02d}"
+                    if stock_revenue_period
+                    else ""
+                ),
                 "revenue_3m_yoy": revenue_3m_yoy,
                 "previous_revenue_3m_yoy": previous_revenue_3m_yoy,
                 "revenue_acceleration": revenue_acceleration,
@@ -650,6 +673,21 @@ def analyze(
         sum(row["complete_profit_years"] == len(annual_years) for row in active_results) / max(1, active_count)
     )
     hard_pass_count = sum(row["hard_pass"] for row in results)
+    operating_active_results = [
+        row
+        for row in active_results
+        if row["industry"] not in financial_industries
+    ]
+    revenue_period_distribution = dict(
+        sorted(
+            Counter(
+                str(row["revenue_period"])
+                for row in operating_active_results
+                if row.get("revenue_3m_yoy") is not None and row.get("revenue_period")
+            ).items(),
+            reverse=True,
+        )
+    )
     revenue_threshold = float(config["quality_checks"]["min_revenue_coverage"])
     revenue_checks, revenue_metrics = revenue_coverage_checks(
         results,
@@ -721,13 +759,20 @@ def analyze(
     model_status = aggregate_check_status(checks)
 
     metadata = {
+        "model_id": "defensive_value",
+        "model_name": "台股防禦型價值篩選",
+        "config_version": config.get("version"),
         "as_of": as_of.isoformat(),
         "latest_market_date": latest_market_date,
         "latest_financial_quarter": latest_quarter.isoformat(),
         "annual_years": annual_years,
         "latest_revenue_period": (
-            f"{latest_revenue_period[0]}-{latest_revenue_period[1]:02d}" if latest_revenue_period else ""
+            f"{latest_available_revenue_period[0]}-{latest_available_revenue_period[1]:02d}"
+            if latest_available_revenue_period
+            else ""
         ),
+        "revenue_period_policy": "stock_latest_complete_3m",
+        "revenue_period_distribution": revenue_period_distribution,
         "universe_count": universe_count,
         "active_count": active_count,
         "no_recent_price_count": universe_count - active_count,

@@ -51,6 +51,7 @@ class FinMindClient:
         data_id: str | None = None,
         force: bool = False,
         max_age_hours: float | None = None,
+        cache_tag: str | None = None,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {"dataset": dataset}
         if start_date:
@@ -60,7 +61,7 @@ class FinMindClient:
         if data_id:
             params["data_id"] = data_id
 
-        cache_file = self._cache_path(dataset, params)
+        cache_file = self._cache_path(dataset, params, cache_tag=cache_tag)
         if not force and self._cache_valid(cache_file, max_age_hours):
             with gzip.open(cache_file, "rt", encoding="utf-8") as handle:
                 return json.load(handle)["data"]
@@ -112,13 +113,20 @@ class FinMindClient:
                     time.sleep(2**attempt)
         raise FinMindError(f"FinMind 查詢失敗: {last_error}") from last_error
 
-    def _cache_path(self, dataset: str, params: dict[str, str]) -> Path:
+    def _cache_path(
+        self,
+        dataset: str,
+        params: dict[str, str],
+        *,
+        cache_tag: str | None = None,
+    ) -> Path:
         key = json.dumps(params, sort_keys=True, ensure_ascii=False).encode("utf-8")
         digest = hashlib.sha256(key).hexdigest()[:12]
         date_part = params.get("start_date", "all")
         end_part = params.get("end_date", "now")
         data_id = params.get("data_id", "market")
-        safe_name = f"{date_part}_{end_part}_{data_id}_{digest}.json.gz".replace("/", "-")
+        tag_part = f"_{cache_tag}" if cache_tag else ""
+        safe_name = f"{date_part}_{end_part}_{data_id}_{digest}{tag_part}.json.gz".replace("/", "-")
         return self.cache_dir / dataset / safe_name
 
     @staticmethod

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -343,6 +344,16 @@ def build_momentum_result(base_result: dict[str, Any], config: dict[str, Any]) -
         financial_industries=financial_industries,
     )
     acceleration_coverage = acceleration_metrics["universe_revenue_coverage"]
+    revenue_period_distribution = dict(
+        sorted(
+            Counter(
+                str(row["revenue_period"])
+                for row in active_rows
+                if row.get("revenue_acceleration") is not None and row.get("revenue_period")
+            ).items(),
+            reverse=True,
+        )
+    )
     margin_change_coverage = coverage("ttm_operating_margin_change")
     cash_conversion_coverage = coverage("cash_conversion")
     quality_thresholds = config["quality_checks"]
@@ -425,6 +436,7 @@ def build_momentum_result(base_result: dict[str, Any], config: dict[str, Any]) -
         {
             "model_id": config["model"]["id"],
             "model_name": config["model"]["name"],
+            "config_version": config.get("version"),
             "hard_pass_count": hard_pass_count,
             "watchlist_count": min(hard_pass_count, watchlist_size),
             "focus_count": min(hard_pass_count, focus_size),
@@ -433,6 +445,8 @@ def build_momentum_result(base_result: dict[str, Any], config: dict[str, Any]) -
             "model_status": model_status,
             "data_status": data_status,
             "revenue_acceleration_coverage": acceleration_coverage,
+            "revenue_period_policy": "stock_latest_complete_3m",
+            "revenue_period_distribution": revenue_period_distribution,
             "ranked_revenue_coverage": acceleration_metrics["ranked_revenue_coverage"],
             "universe_revenue_coverage": acceleration_metrics["universe_revenue_coverage"],
             "revenue_coverage_threshold": acceleration_threshold,

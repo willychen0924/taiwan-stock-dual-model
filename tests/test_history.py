@@ -36,6 +36,7 @@ def payload(
         "rank": 1 if ranked else None,
         "total_score": 70,
         "funnel_stage": "精華20" if ranked else "基礎觀察",
+        "revenue_period": "2026-06",
         "revenue_3m_yoy": 0.1 if complete_revenue else None,
         "revenue_acceleration": 0.05 if complete_revenue else None,
     }
@@ -70,6 +71,14 @@ class RankingHistoryTests(unittest.TestCase):
             self.assertEqual(record["rankings"], [])
             self.assertFalse(record["eligible_for_backtest"])
             self.assertIn("來源模型狀態為 WARN", record["ineligible_reasons"])
+
+    def test_history_keeps_stock_specific_revenue_period(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            path = self.write_report(root, "report.json", payload(as_of="2026-08-03"))
+            record = build_history_record(json.loads(path.read_text()), path, root=root, **HISTORY_KWARGS)
+            self.assertEqual(record["schema_version"], 4)
+            self.assertEqual(record["rankings"][0]["revenue_period"], "2026-06")
 
     def test_incomplete_revenue_is_not_eligible_even_when_status_is_ok(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

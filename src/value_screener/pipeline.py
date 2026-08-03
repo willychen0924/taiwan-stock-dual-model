@@ -170,13 +170,19 @@ def run_pipeline(
     ]
     datasets["revenue"] = []
     for revenue_date in revenue_dates:
+        is_current_revenue_snapshot = revenue_date == revenue_dates[-1]
+        snapshot_is_today = as_of == date.today()
         datasets["revenue"].extend(
             client.fetch(
                 "TaiwanStockMonthRevenue",
                 start_date=revenue_date.isoformat(),
                 end_date=next_day(revenue_date).isoformat(),
                 force=force,
-                max_age_hours=18 if revenue_date == revenue_dates[-1] else None,
+                # The current filing month changes daily as issuers disclose.
+                # Preserve one point-in-time snapshot per report date so a later
+                # rerun cannot leak subsequently published revenue into history.
+                max_age_hours=18 if is_current_revenue_snapshot and snapshot_is_today else None,
+                cache_tag=f"asof_{as_of.isoformat()}" if is_current_revenue_snapshot else None,
             )
         )
 

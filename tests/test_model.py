@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from value_screener.config import validate_config  # noqa: E402
 from value_screener.model import (  # noqa: E402
     descending_score,
+    latest_complete_revenue_period,
     linear_score,
     parse_balance,
     parse_cashflow,
@@ -92,6 +93,18 @@ class FinancialParsingTests(unittest.TestCase):
             (2026, 3): 130,
         }
         self.assertAlmostEqual(revenue_window_yoy(revenues, [(2026, 1), (2026, 2), (2026, 3)]), 0.2)
+
+    def test_latest_complete_revenue_period_is_stock_specific(self) -> None:
+        early_reporter = {
+            **{(2025, month): 100 for month in (5, 6, 7)},
+            **{(2026, month): 110 for month in (5, 6, 7)},
+        }
+        pending_reporter = {
+            **{(2025, month): 100 for month in (4, 5, 6)},
+            **{(2026, month): 110 for month in (4, 5, 6)},
+        }
+        self.assertEqual(latest_complete_revenue_period(early_reporter), (2026, 7))
+        self.assertEqual(latest_complete_revenue_period(pending_reporter), (2026, 6))
 
 
 class ConfigTests(unittest.TestCase):

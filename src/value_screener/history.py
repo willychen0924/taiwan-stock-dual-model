@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from .quality import revenue_signal_coverage_metadata, revenue_signal_coverage_metrics
 
-HISTORY_SCHEMA_VERSION = 3
+HISTORY_SCHEMA_VERSION = 4
 VOLATILE_METADATA_KEYS = {"created_at", "generated_at", "report_generated_at", "timestamp"}
 
 
@@ -90,6 +90,7 @@ def build_history_record(
             "rank": int(row["rank"]),
             "total_score": row.get("total_score"),
             "close": row.get("close"),
+            "revenue_period": str(row.get("revenue_period") or ""),
             "funnel_stage": str(row.get("funnel_stage") or ""),
         }
         for row in sorted(ranked_rows, key=lambda item: int(item["rank"]))
