@@ -12,9 +12,11 @@ sys.path.insert(0, str(ROOT / "src"))
 from value_screener.config import validate_config  # noqa: E402
 from value_screener.model import (  # noqa: E402
     descending_score,
+    hard_pass_revenue_coverage,
     linear_score,
     parse_balance,
     parse_cashflow,
+    revenue_coverage_check,
     revenue_window_yoy,
 )
 from value_screener.dates import latest_complete_quarter  # noqa: E402
@@ -32,6 +34,20 @@ class ScoreTests(unittest.TestCase):
         self.assertEqual(descending_score(5, 10, 40, 4), 4)
         self.assertEqual(descending_score(50, 10, 40, 4), 0)
         self.assertAlmostEqual(descending_score(25, 10, 40, 4), 2)
+
+    def test_revenue_coverage_uses_only_hard_pass_rows(self) -> None:
+        rows = [
+            {"hard_pass": True, "revenue_3m_yoy": 0.1},
+            {"hard_pass": True, "revenue_3m_yoy": None},
+            {"hard_pass": False, "revenue_3m_yoy": 0.2},
+        ]
+        self.assertEqual(hard_pass_revenue_coverage(rows), 0.5)
+        self.assertEqual(hard_pass_revenue_coverage([]), 0.0)
+        self.assertEqual(revenue_coverage_check(rows)["status"], "WARN")
+        self.assertEqual(
+            revenue_coverage_check([{"hard_pass": True, "revenue_3m_yoy": 0.1}])["status"],
+            "OK",
+        )
 
 
 class FinancialParsingTests(unittest.TestCase):

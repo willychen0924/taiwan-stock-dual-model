@@ -42,6 +42,25 @@ def descending_score(value: float | None, best: float, worst: float, points: flo
     return points * clamp((worst - value) / (worst - best))
 
 
+def hard_pass_revenue_coverage(rows: Iterable[dict[str, Any]]) -> float:
+    hard_pass_rows = [row for row in rows if row.get("hard_pass")]
+    if not hard_pass_rows:
+        return 0.0
+    return sum(row.get("revenue_3m_yoy") is not None for row in hard_pass_rows) / len(hard_pass_rows)
+
+
+def revenue_coverage_check(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    coverage = hard_pass_revenue_coverage(rows)
+    return {
+        "check": "排名母體營收覆蓋率",
+        "actual": coverage,
+        "expected": 0.80,
+        "tolerance": 0,
+        "status": "OK" if coverage >= 0.80 else "WARN",
+        "notes": "以量化硬門檻通過公司為分母，需有完整3M月營收年增率",
+    }
+
+
 def last_quarters(end: date, count: int) -> list[date]:
     values = [end]
     while len(values) < count:
@@ -682,6 +701,7 @@ def analyze(
             "status": "OK" if profit_coverage >= 0.70 else "WARN",
             "notes": "新上市公司與資料缺漏會降低覆蓋",
         },
+        revenue_coverage_check(results),
         {
             "check": "量化硬門檻通過數",
             "actual": hard_pass_count,
