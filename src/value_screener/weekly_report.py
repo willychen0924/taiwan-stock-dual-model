@@ -164,10 +164,11 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
 
     segment_note = ""
     if len(segments) > 1:
+        other_segments = [part for part in segments if part is not segment]
         descriptions = "；".join(
             f'{part[0].get("latest_market_date")}～{part[-1].get("latest_market_date")} '
             f'({_version_label(part[0].get("config_version"))}，{len(part)}日)'
-            for part in segments
+            for part in other_segments
         )
         segment_note = (
             '<p class="weekly-warning">本週包含多個模型版本，以下只比較同版本內最長區間：'

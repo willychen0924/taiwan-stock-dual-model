@@ -87,6 +87,20 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn("不是買進建議", page)
         self.assertIn('href="../../latest/index.html"', page)
 
+    def test_version_warning_lists_only_unselected_segments_as_other(self) -> None:
+        records = []
+        for model_id in ["defensive_value", "operating_momentum"]:
+            records.extend(
+                [
+                    record(model_id, "2026-07-27", version="0.1.0"),
+                    record(model_id, "2026-07-28", version="0.1.0"),
+                    record(model_id, "2026-07-29", version="0.2.0"),
+                ]
+            )
+        page = build_weekly_html(records, week_start=date(2026, 7, 27), week_end=date(2026, 7, 31))
+        self.assertIn("其餘區間：2026-07-29～2026-07-29 (0.2.0，1日)", page)
+        self.assertNotIn("其餘區間：2026-07-27～2026-07-28", page)
+
 
 if __name__ == "__main__":
     unittest.main()
