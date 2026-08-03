@@ -30,18 +30,18 @@ fi
 if (( EXCEL_AVAILABLE )); then
   "$NODE_BIN" scripts/build_report.mjs \
     reports/latest/screening_results.json \
-    "outputs/${AS_OF}/台股價值篩選_${AS_OF}.xlsx"
+    "outputs/${AS_OF}/台股防禦價值篩選_${AS_OF}.xlsx"
   "$NODE_BIN" scripts/build_momentum_report.mjs \
     reports/momentum/latest/screening_results.json \
-    "outputs/${AS_OF}/台股營運動能_${AS_OF}.xlsx"
+    "outputs/${AS_OF}/台股營運動能篩選_${AS_OF}.xlsx"
 fi
 
 "$PYTHON_BIN" scripts/cleanup_old_reports.py --as-of "$AS_OF" --keep-days 7
 
 print "完成：reports/latest 與 reports/momentum/latest 的 JSON、CSV、HTML"
 if (( EXCEL_AVAILABLE )); then
-  print "完成：outputs/${AS_OF}/台股價值篩選_${AS_OF}.xlsx"
-  print "完成：outputs/${AS_OF}/台股營運動能_${AS_OF}.xlsx"
+  print "完成：outputs/${AS_OF}/台股防禦價值篩選_${AS_OF}.xlsx"
+  print "完成：outputs/${AS_OF}/台股營運動能篩選_${AS_OF}.xlsx"
 else
   print "Excel：本次略過；補齊 config/report_toolchain.json 所列工具鏈後可單獨重建。"
 fi

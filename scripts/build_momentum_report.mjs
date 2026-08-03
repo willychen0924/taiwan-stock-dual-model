@@ -7,7 +7,7 @@ import { loadEnrichment } from "./report_enrichment.mjs";
 
 
 const inputPath = process.argv[2] ?? "reports/momentum/latest/screening_results.json";
-const outputPath = process.argv[3] ?? "outputs/latest/台股營運動能.xlsx";
+const outputPath = process.argv[3] ?? "outputs/latest/台股營運動能篩選.xlsx";
 const root = process.cwd();
 const payload = JSON.parse(await fs.readFile(inputPath, "utf8"));
 const { metadata: meta, config, checks, results } = payload;
@@ -101,7 +101,7 @@ function descendingFormula(cell, row) {
 }
 
 // 模型說明
-titleBand(explanation, "A1:H1", "高品質營運動能模型說明");
+titleBand(explanation, "A1:H1", "營運動能模型說明");
 explanation.getRange("A3:H3").merge();
 explanation.getRange("A3").values = [["核心概念"]];
 explanation.getRange("A3:H3").format = { fill: colors.green, font: { bold: true, color: colors.white, size: 12 } };
@@ -331,7 +331,7 @@ const auditWidths = {
 for (const [col, width] of Object.entries(auditWidths)) setColumnWidth(audit, col, Math.max(6, auditLastRow), width);
 
 // 儀表板
-titleBand(dashboard, "A1:Q1", "台股高品質營運動能篩選儀表板");
+titleBand(dashboard, "A1:Q1", "台股營運動能篩選儀表板");
 dashboard.getRange("A2:Q2").merge();
 dashboard.getRange("A2").values = [[`市場資料 ${meta.latest_market_date}｜營收期 ${meta.latest_revenue_period}｜財報季 ${meta.latest_financial_quarter}｜僅供研究篩選，非投資建議`]];
 dashboard.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
@@ -470,7 +470,7 @@ sources.getRange("A5:F8").values = [
   ["FM-MKT", "Price / 本益比 / 本淨比 / MarketValue", meta.latest_market_date, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Technical/", "市場、估值與成交流動性"],
   ["FM-FUND", "Income / CashFlows / BalanceSheet", meta.latest_financial_quarter, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Fundamental/", "獲利、營益率、現金轉換與財務品質"],
   ["FM-REV", "TaiwanStockMonthRevenue", meta.latest_revenue_period, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Fundamental/", "近月營收年增與前後三月動能差"],
-  ["MODEL", "高品質營運動能模型", meta.as_of, "本專案", "", "營運60／品質25／估值流動性15；不構成投資建議"],
+  ["MODEL", "營運動能模型", meta.as_of, "本專案", "", "營運60／品質25／估值流動性15；不構成投資建議"],
 ];
 sources.getRange("A10:F14").values = [
   ["完整明細", "screening_results.csv", meta.as_of, "本專案", "", `Excel 主排名只保留硬門檻通過欄位；全市場 33 欄請查 reports/momentum/${meta.as_of}/screening_results.csv`],

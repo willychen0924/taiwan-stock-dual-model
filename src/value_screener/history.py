@@ -33,7 +33,7 @@ def build_history_record(
     metadata = payload["metadata"]
     results = payload["results"]
     model_id = str(metadata.get("model_id") or "defensive_value")
-    model_name = str(metadata.get("model_name") or "台股防禦型價值篩選")
+    model_name = str(metadata.get("model_name") or "台股防禦價值篩選")
     source_bytes = source_path.read_bytes()
     source_sha256 = hashlib.sha256(source_bytes).hexdigest()
     snapshot_sha256 = _semantic_sha256(payload)

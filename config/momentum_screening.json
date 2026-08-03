@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "model": {
     "id": "operating_momentum",
-    "name": "台股高品質營運動能篩選"
+    "name": "台股營運動能篩選"
   },
   "weights": {
     "operating_momentum": 60,

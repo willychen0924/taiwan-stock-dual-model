@@ -128,7 +128,7 @@ def build_combined_html(
             ("硬門檻通過", value_meta.get("hard_pass_count")),
             ("雙模型交集", intersection_count),
         ],
-        extra_summary="防禦型價值",
+        extra_summary="防禦價值",
     )
     momentum_status = build_monitor_status(
         momentum_meta,
@@ -149,7 +149,7 @@ def build_combined_html(
 <div class="hero"><div><h1>台股雙模型監控台</h1><p>報表日 {html.escape(str(value_meta.get('as_of') or ''))}　·　市場日 {html.escape(str(value_meta.get('latest_market_date') or ''))}　·　排名只用於研究排序，不是買進建議</p></div><div class="hero-status">交集 {html.escape(str(intersection_count))}</div></div>
 <div class="grid">{value_status}{momentum_status}</div>
 <div class="panel"><h2>雙模型交集</h2><p class="note">{html.escape(intersection_note)}</p>{intersection}</div>
-<div class="grid"><section class="panel"><div class="panel-head"><h2>防禦型價值精華20</h2><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{_model_table(value_focus, model_id='defensive_value', enrichment=enrichment)}</section>
+<div class="grid"><section class="panel"><div class="panel-head"><h2>防禦價值精華20</h2><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{_model_table(value_focus, model_id='defensive_value', enrichment=enrichment)}</section>
 <section class="panel"><div class="panel-head"><h2>營運動能精華20</h2><div class="legend"><span class="key-dot key-first"></span>營運動能　<span class="key-dot key-second"></span>品質　<span class="key-dot key-third"></span>估值流動性</div></div>{_model_table(momentum_focus, model_id='operating_momentum', enrichment=enrichment)}</section></div>
 <p class="note">技術面與籌碼面僅為外部呈現欄位，不進入分數、硬門檻、模型狀態或排名歷史。</p>
 {sortable_script}</div></body></html>"""

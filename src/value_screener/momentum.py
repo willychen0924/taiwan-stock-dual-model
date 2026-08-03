@@ -420,7 +420,7 @@ def build_momentum_result(base_result: dict[str, Any], config: dict[str, Any]) -
             "expected": "OK",
             "tolerance": 0,
             "status": base_data_status if base_data_status in {"OK", "WARN", "FAIL"} else "WARN",
-            "notes": "僅沿用防禦型價值管線的共用資料狀態",
+            "notes": "僅沿用防禦價值管線的共用資料狀態",
         },
     ]
     data_check_names = {"營收加速度覆蓋率", "營益率年變化覆蓋率", "現金轉換覆蓋率", "共用資料模型狀態"}

@@ -7,7 +7,7 @@ import { loadEnrichment } from "./report_enrichment.mjs";
 
 
 const inputPath = process.argv[2] ?? "reports/latest/screening_results.json";
-const outputPath = process.argv[3] ?? "outputs/latest/台股價值篩選.xlsx";
+const outputPath = process.argv[3] ?? "outputs/latest/台股防禦價值篩選.xlsx";
 const root = process.cwd();
 const payload = JSON.parse(await fs.readFile(inputPath, "utf8"));
 const { metadata: meta, config, checks, results } = payload;
@@ -102,7 +102,7 @@ function descendingFormula(cell, bestRef, worstRef, points) {
 }
 
 // 模型說明
-titleBand(explanation, "A1:H1", "防禦型價值模型說明");
+titleBand(explanation, "A1:H1", "防禦價值模型說明");
 explanation.getRange("A3:H3").merge();
 explanation.getRange("A3").values = [["核心概念"]];
 explanation.getRange("A3:H3").format = { fill: colors.teal, font: { bold: true, color: colors.white, size: 12 } };
@@ -378,7 +378,7 @@ setColumnWidth(audit, "H", Math.max(6, auditLastRow), 36);
 setColumnWidth(audit, "AS", Math.max(6, auditLastRow), 20);
 
 // 儀表板
-titleBand(dashboard, "A1:Q1", "台股防禦型價值篩選儀表板");
+titleBand(dashboard, "A1:Q1", "台股防禦價值篩選儀表板");
 dashboard.getRange("A2:Q2").merge();
 dashboard.getRange("A2").values = [[`資料日 ${meta.latest_market_date}｜財報季 ${meta.latest_financial_quarter}｜營收期 ${meta.latest_revenue_period}｜僅供研究篩選，非投資建議`]];
 dashboard.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, horizontalAlignment: "left" };
@@ -536,7 +536,7 @@ const sourceRows = [
   ["FM-MKT", "TaiwanStockInfo / Price / 本益比 / MarketValue", meta.latest_market_date, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Technical/", "市場、價格、市值與估值；資料更新依API實際回傳"],
   ["FM-FUND", "BalanceSheet / FinancialStatements / CashFlows / MonthRevenue", meta.latest_financial_quarter, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Fundamental/", "財報與月營收；使用保守申報落後期"],
   ["FM-API", "FinMind API v4", meta.as_of, "FinMind", "https://api.finmindtrade.com/docs", "Backer 全市場指定日期查詢"],
-  ["MODEL", "防禦型價值篩選模型", meta.as_of, "本專案", "", "商譽清算價值為0；金融業不使用一般公司模型；分數不構成投資建議"],
+  ["MODEL", "防禦價值篩選模型", meta.as_of, "本專案", "", "商譽清算價值為0；金融業不使用一般公司模型；分數不構成投資建議"],
 ];
 sources.getRange("A5:F8").values = sourceRows;
 sources.getRange("E5:E8").format.font = { color: colors.red };

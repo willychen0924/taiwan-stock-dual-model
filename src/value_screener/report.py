@@ -360,11 +360,11 @@ def _build_html(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>台股防禦型價值篩選｜{html.escape(meta['as_of'])}</title>
+<title>台股防禦價值篩選｜{html.escape(meta['as_of'])}</title>
 <style>{monitor_report_css()}</style>
 </head>
 <body><div class="wrap">
-<div class="hero"><div><h1>台股防禦型價值篩選</h1><p>市場日 {html.escape(meta['latest_market_date'])}　·　財報季 {html.escape(meta['latest_financial_quarter'])}　·　研究候選，不是買進建議</p></div><div class="hero-status {html.escape(str(meta.get('model_status') or 'UNKNOWN').lower())}">{html.escape(str(meta.get('model_status') or 'UNKNOWN'))}</div></div>
+<div class="hero"><div><h1>台股防禦價值篩選</h1><p>市場日 {html.escape(meta['latest_market_date'])}　·　財報季 {html.escape(meta['latest_financial_quarter'])}　·　研究候選，不是買進建議</p></div><div class="hero-status {html.escape(str(meta.get('model_status') or 'UNKNOWN').lower())}">{html.escape(str(meta.get('model_status') or 'UNKNOWN'))}</div></div>
 {checks_panel}
 <div class="panel"><div class="panel-head"><div><h2>精華候選</h2><p class="note">{comparison_note}</p></div><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{focus_table}
 <details class="watchlist"><summary>展開自選100第 21–100 名（{len(watchlist_remainder)} 檔）</summary>{remainder_table}</details></div>

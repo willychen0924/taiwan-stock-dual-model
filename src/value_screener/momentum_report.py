@@ -218,7 +218,7 @@ def _build_momentum_html(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>台股高品質營運動能篩選｜{html.escape(meta['as_of'])}</title>
+<title>台股營運動能篩選｜{html.escape(meta['as_of'])}</title>
 <style>{monitor_report_css()}</style>
 </head>
 <body><div class="wrap">

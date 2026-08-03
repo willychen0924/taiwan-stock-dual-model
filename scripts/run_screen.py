@@ -21,7 +21,7 @@ from value_screener.report import write_reports  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="台股防禦型價值全市場篩選")
+    parser = argparse.ArgumentParser(description="台股防禦價值全市場篩選")
     parser.add_argument("--as-of", type=date.fromisoformat, default=date.today())
     parser.add_argument("--config", type=Path, default=ROOT / "config" / "screening.json")
     parser.add_argument(

@@ -760,7 +760,7 @@ def analyze(
 
     metadata = {
         "model_id": "defensive_value",
-        "model_name": "台股防禦型價值篩選",
+        "model_name": "台股防禦價值篩選",
         "config_version": config.get("version"),
         "as_of": as_of.isoformat(),
         "latest_market_date": latest_market_date,

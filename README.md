@@ -1,4 +1,4 @@
-# 台股價值與營運動能篩選器
+# 台股防禦價值與營運動能篩選器
 
 這個專案把「重視下檔安全、絕對／相對便宜、老公司新動能」轉成可稽核的全市場篩選流程。程式只產生研究候選名單，不會下單，也不把量化分數當成投資保證。
 
@@ -13,7 +13,7 @@
 
 商譽的清算折價預設為 0；「30% 最大損失」不作保證。完整門檻位於 `config/screening.json`。
 
-專案另提供獨立的高品質營運動能模型：營運動能 60 分、動能品質 25 分、估值與流動性 15 分；完整設定位於 `config/momentum_screening.json`。兩個模型共用市場與財報資料，但門檻、分數及排名互不混用。
+專案另提供獨立的營運動能模型：營運動能 60 分、動能品質 25 分、估值與流動性 15 分；完整設定位於 `config/momentum_screening.json`。兩個模型共用市場與財報資料，但門檻、分數及排名互不混用。
 
 ## 執行
 
@@ -29,11 +29,11 @@ FINMIND_TOKEN=你的實際_token
 python3 scripts/run_screen.py
 ```
 
-掃描會在 `reports/latest/` 產生防禦型價值 JSON、CSV 與 HTML，並在 `reports/momentum/latest/` 產生營運動能版本。Excel 報表由 OpenAI artifact runtime 產生。
+掃描會在 `reports/latest/` 產生防禦價值 JSON、CSV 與 HTML，並在 `reports/momentum/latest/` 產生營運動能版本。Excel 報表由 OpenAI artifact runtime 產生。
 
 ```bash
-node scripts/build_report.mjs reports/latest/screening_results.json outputs/latest/台股價值篩選.xlsx
-node scripts/build_momentum_report.mjs reports/momentum/latest/screening_results.json outputs/latest/台股營運動能.xlsx
+node scripts/build_report.mjs reports/latest/screening_results.json outputs/latest/台股防禦價值篩選.xlsx
+node scripts/build_momentum_report.mjs reports/momentum/latest/screening_results.json outputs/latest/台股營運動能篩選.xlsx
 ```
 
 或一次執行全部流程：
@@ -44,7 +44,7 @@ zsh scripts/run_all.sh
 
 建議排程於交易日上午執行；模型使用前一個已完成交易日，避免盤中未完整資料。當月營收會按報表日保存不可變快照；當天可定期刷新，日後重跑舊日期不會混入後來才公布的營收。流動性硬門檻使用 20 日均成交額，HTML 與 Excel 主排名則以 20 日均量（張）方便閱讀。
 
-每日完整流程會同時產出 `台股價值篩選_日期.xlsx` 與 `台股營運動能_日期.xlsx`，兩份 Excel 都包含「模型說明」工作表。
+每日完整流程會同時產出 `台股防禦價值篩選_日期.xlsx` 與 `台股營運動能篩選_日期.xlsx`，兩份 Excel 都包含「模型說明」工作表。
 
 重新下載歷史快取可加上 `--force`。日常執行不需要重抓已封存季度資料。
 
