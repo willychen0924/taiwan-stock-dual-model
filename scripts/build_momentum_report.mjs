@@ -57,6 +57,8 @@ const colors = {
   red: "#DC2626",
   gray: "#64748B",
 };
+// 分數組成專用色；不得與工作簿介面主色混用。
+const scoreColors = { first: "#16A34A", second: "#1D4ED8", third: "#EA580C" };
 
 for (const sheet of [dashboard, explanation, ranking, rejected, audit, chartData, review, assumptions, checkSheet, sources]) {
   sheet.showGridLines = false;
@@ -114,7 +116,7 @@ const momentumSteps = [
   ["3 品質門檻", "要求TTM淨利為正，排除重大負債異常、資料缺漏及人工否決公司；前期虧損者另列轉機觀察。"],
   ["4 動能60分", "評估近三月與最新月營收年增、營收加速度、TTM淨利成長、同業營益率位置及營益率改善。"],
   ["5 品質25分", "檢視獲利連續性、自由現金流、最近完整年度現金轉換能力、負債安全與淨現金。"],
-  ["6 估值流動性15分", "比較同業PER、PBR位置、絕對本益比及20日平均成交金額。"],
+  ["6 估值流動性15分", "比較同業本益比、本淨比位置、絕對本益比及20日平均成交金額。"],
   ["7 研究漏斗", "通過門檻後依總分排序，前100名列入觀察名單，前20名列為優先研究對象。"],
   ["8 質化覆核", "確認成長來源、競爭優勢、治理風險、低基期效應與一次性因素，判斷動能延續性。"],
 ];
@@ -135,7 +137,7 @@ explanation.getRange("A4:H8").format.rowHeight = 25;
 // 參數
 titleBand(assumptions, "A1:E1", "營運動能模型參數");
 assumptions.getRange("A2:E2").merge();
-assumptions.getRange("A2").values = [["藍字為可調整參數；分數公式會即時重算，但修改門檻後須重新執行掃描才會重新排序。"]];
+assumptions.getRange("A2").values = [["藍字參數只會更新「試算稽核」的公式；主排名是本次管線輸出的靜態值，修改門檻後仍須重新執行掃描才會重新排序。"]];
 assumptions.getRange("A2").format = { font: { color: colors.gray, italic: true }, wrapText: true };
 assumptions.getRange("A4:E4").values = [["類別", "參數／指標", "下限／最佳", "目標／最差", "分數"]];
 formatHeader(assumptions.getRange("A4:E4"));
@@ -172,9 +174,9 @@ assumptions.getRange("A18:E34").values = [
   ["動能品質", "現金轉換", t.cash_conversion_floor, t.cash_conversion_target, p.quality.cash_conversion],
   ["動能品質", "負債／資產", t.liabilities_ratio_best, t.liabilities_ratio_worst, p.quality.liabilities_ratio],
   ["動能品質", "淨現金／市值", t.net_cash_ratio_floor, t.net_cash_ratio_target, p.quality.net_cash_ratio],
-  ["估值流動性", "同業PER分位", 0, 1, p.valuation_liquidity.sector_per_percentile],
-  ["估值流動性", "同業PBR分位", 0, 1, p.valuation_liquidity.sector_pbr_percentile],
-  ["估值流動性", "絕對PER", t.per_best, t.per_worst, p.valuation_liquidity.absolute_per],
+  ["估值流動性", "同業本益比分位", 0, 1, p.valuation_liquidity.sector_per_percentile],
+  ["估值流動性", "同業本淨比分位", 0, 1, p.valuation_liquidity.sector_pbr_percentile],
+  ["估值流動性", "絕對本益比", t.per_best, t.per_worst, p.valuation_liquidity.absolute_per],
   ["估值流動性", "20日均成交額", config.hard_gates.min_avg_daily_turnover_twd, t.turnover_target_twd, p.valuation_liquidity.turnover],
   ["說明", "營收資料期", null, null, null],
   ["說明", meta.latest_revenue_period, null, null, null],
@@ -203,7 +205,7 @@ ranking.getRange("A3:Y3").merge();
 ranking.getRange("A3").values = [["本頁為靜態模型結果，不因工作簿參數變動而改寫；公式重算與抽樣驗證請見「試算稽核」。"]];
 ranking.getRange("A3").format = { font: { italic: true, color: colors.gray } };
 const mainHeaders = [
-  "排名", "代碼", "公司", "產業", "漏斗階段", "分類", "治理狀態", "收盤價", "20日均成交額(百萬元)", "PER", "PBR",
+  "排名", "代碼", "公司", "產業", "漏斗階段", "分類", "治理狀態", "收盤價", "20日均成交額(百萬元)", "本益比", "本淨比",
   "近3月營收YoY", "單月營收YoY", "營收加速度", "TTM淨利成長", "營益率年變化", "獲利年數", "正FCF年數",
   "現金轉換", "負債/資產", "淨現金/市值", "營運動能分", "動能品質分", "估值流動性分", "總分",
 ];
@@ -276,9 +278,9 @@ audit.getRange("A2:AG2").merge();
 audit.getRange("A2").values = [[`抽查 ${auditRows.length} 檔：排名前段／邊界／最後通過者／缺值、轉機與前期資料不足案例；綠字公式須與 Python pipeline 一致。`]];
 audit.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
 const auditHeaders = [
-  "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "20日均成交額(百萬元)", "PER", "PBR",
+  "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "20日均成交額(百萬元)", "本益比", "本淨比",
   "近3月營收YoY", "單月營收YoY", "營收加速度", "TTM淨利成長", "TTM營益率", "營益率年變化", "獲利年數", "正FCF年數",
-  "現金轉換", "負債/資產", "淨現金/市值", "同業PER分位", "同業PBR分位", "同業營益率分位", "營運動能分", "動能品質分",
+  "現金轉換", "負債/資產", "淨現金/市值", "同業本益比分位", "同業本淨比分位", "同業營益率分位", "營運動能分", "動能品質分",
   "估值流動性分", "總分", "硬門檻", "缺漏旗標", "模型短評（自動）",
 ];
 audit.getRange("A5:AG5").values = [auditHeaders];
@@ -385,9 +387,9 @@ if (chartRowCount) {
     titleTextStyle: { fontSize: 12 },
     categories: computed.map((row) => String(row[0] ?? "")),
     series: [
-      { name: "營運動能", values: computed.map((row) => Number(row[1] ?? 0)), fill: { type: "solid", color: colors.green } },
-      { name: "動能品質", values: computed.map((row) => Number(row[2] ?? 0)), fill: { type: "solid", color: "#2563EB" } },
-      { name: "估值流動性", values: computed.map((row) => Number(row[3] ?? 0)), fill: { type: "solid", color: colors.amber } },
+      { name: "營運動能", values: computed.map((row) => Number(row[1] ?? 0)), fill: { type: "solid", color: scoreColors.first } },
+      { name: "動能品質", values: computed.map((row) => Number(row[2] ?? 0)), fill: { type: "solid", color: scoreColors.second } },
+      { name: "估值流動性", values: computed.map((row) => Number(row[3] ?? 0)), fill: { type: "solid", color: scoreColors.third } },
     ],
     hasLegend: true,
     legend: { position: "bottom", textStyle: { fontSize: 10 } },
@@ -464,7 +466,7 @@ titleBand(sources, "A1:F1", "營運動能資料來源與方法限制");
 sources.getRange("A4:F4").values = [["來源ID", "資料集／項目", "資料日期", "提供者", "網址", "用途與限制"]];
 formatHeader(sources.getRange("A4:F4"));
 sources.getRange("A5:F8").values = [
-  ["FM-MKT", "Price / PER / PBR / MarketValue", meta.latest_market_date, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Technical/", "市場、估值與成交流動性"],
+  ["FM-MKT", "Price / 本益比 / 本淨比 / MarketValue", meta.latest_market_date, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Technical/", "市場、估值與成交流動性"],
   ["FM-FUND", "Income / CashFlows / BalanceSheet", meta.latest_financial_quarter, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Fundamental/", "獲利、營益率、現金轉換與財務品質"],
   ["FM-REV", "TaiwanStockMonthRevenue", meta.latest_revenue_period, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Fundamental/", "近月營收年增與前後三月動能差"],
   ["MODEL", "高品質營運動能模型", meta.as_of, "本專案", "", "營運60／品質25／估值流動性15；不構成投資建議"],

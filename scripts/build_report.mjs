@@ -58,6 +58,8 @@ const colors = {
   white: "#FFFFFF",
   black: "#000000",
 };
+// 分數組成專用色；不得與工作簿介面主色混用。
+const scoreColors = { first: "#16A34A", second: "#1D4ED8", third: "#EA580C" };
 
 for (const sheet of [dashboard, explanation, ranking, rejected, audit, chartData, review, assumptions, checkSheet, sources]) {
   sheet.showGridLines = false;
@@ -113,7 +115,7 @@ const valueModelSteps = [
   ["1 建立母體", "納入上市、上櫃四位數普通股，排除ETF、存託憑證；金融業因財務結構不同，不與一般公司混合評分。"],
   ["2 硬門檻", "要求約十年交易歷史、五年持續獲利、至少三年正自由現金流、TTM淨利為正，並符合負債與20日均成交額5,000萬元門檻。"],
   ["3 防禦50分", "檢視淨現金、流動比率、負債程度、獲利穩定性與自由現金流，評估財務下檔承受能力。"],
-  ["4 估值30分", "比較保守清算價值、同業PER／PBR分位及絕對本益比，避免只看單一估值指標。"],
+  ["4 估值30分", "比較保守清算價值、同業本益比／本淨比分位及絕對本益比，避免只看單一估值指標。"],
   ["5 動能20分", "觀察近三月與單月營收年增率、同業營益率位置及TTM淨利成長。"],
   ["6 研究漏斗", "通過硬門檻後依總分排序，前100名列入觀察名單，前20名列為優先質化研究對象。"],
   ["7 人工覆核", "確認公司治理、經營誠信、競爭優勢、新動能與重大風險；模型短評不取代人工查證。"],
@@ -135,7 +137,7 @@ explanation.getRange("A4:H8").format.rowHeight = 25;
 // 參數
 titleBand(assumptions, "A1:E1", "模型參數與評分假設");
 assumptions.getRange("A2:E2").merge();
-assumptions.getRange("A2").values = [["藍字為可調整參數；綠字為跨工作表公式；修改門檻後請重新執行掃描以重排名次。"]];
+assumptions.getRange("A2").values = [["藍字參數只會更新「試算稽核」的公式；主排名是本次管線輸出的靜態值，修改門檻後仍須重新執行掃描才會重新排序。"]];
 assumptions.getRange("A2").format = { font: { color: colors.gray, italic: true }, wrapText: true };
 assumptions.getRange("A4:E4").values = [["類別", "參數", "數值", "單位", "說明"]];
 formatHeader(assumptions.getRange("A4:E4"));
@@ -177,8 +179,8 @@ const targetRows = [
   ["評分", "負債比率最差", config.score_targets.liabilities_ratio_worst, "比例", "達此值得0分"],
   ["評分", "清算覆蓋下限", config.score_targets.liquidation_coverage_floor, "比例", "低於此值得0分"],
   ["評分", "清算覆蓋滿分", config.score_targets.liquidation_coverage_target, "比例", "清算價值／市值"],
-  ["評分", "PER最佳端", config.score_targets.per_best, "倍", "低PER端"],
-  ["評分", "PER最差端", config.score_targets.per_worst, "倍", "高PER端"],
+  ["評分", "本益比最佳端", config.score_targets.per_best, "倍", "低本益比端"],
+  ["評分", "本益比最差端", config.score_targets.per_worst, "倍", "高本益比端"],
   ["評分", "成長率下限", config.score_targets.growth_floor, "比例", "低於此值得0分"],
   ["評分", "成長率滿分", config.score_targets.growth_target, "比例", "達此值取得該項滿分"],
 ];
@@ -188,7 +190,7 @@ assumptions.getRange("A38").values = [["權重"]];
 assumptions.getRange("A38:E38").format = { fill: colors.teal, font: { bold: true, color: colors.white } };
 assumptions.getRange("A39:E41").values = [
   ["權重", "防禦", config.weights.defense, "分", "淨現金、流動性、負債、獲利、FCF"],
-  ["權重", "估值", config.weights.valuation, "分", "清算覆蓋、同業估值與絕對PER"],
+  ["權重", "估值", config.weights.valuation, "分", "清算覆蓋、同業估值與絕對本益比"],
   ["權重", "動能", config.weights.momentum, "分", "營收、獲利與同業營益率"],
 ];
 assumptions.getRange("A42:B42").merge();
@@ -233,7 +235,7 @@ ranking.getRange("A3").values = [["本頁為靜態模型結果，不因工作簿
 ranking.getRange("A3").format = { font: { italic: true, color: colors.gray } };
 const mainHeaders = [
   "排名", "代碼", "公司", "產業", "漏斗階段", "治理狀態", "收盤價", "市值(億元)", "20日均成交額(百萬元)",
-  "PER", "PBR", "淨現金/市值", "流動比率", "負債/資產", "清算覆蓋", "近3月營收YoY", "TTM淨利成長",
+  "本益比", "本淨比", "淨現金/市值", "流動比率", "負債/資產", "清算覆蓋", "近3月營收YoY", "TTM淨利成長",
   "防禦分", "估值分", "動能分", "總分",
 ];
 ranking.getRange("A5:U5").values = [mainHeaders];
@@ -308,9 +310,9 @@ audit.getRange("A2").values = [[`抽查 ${auditRows.length} 檔：排名前段�
 audit.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
 const auditHeaders = [
   "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "市值(億元)",
-  "20日均成交額(百萬元)", "PER", "PBR", "現金(百萬元)", "有息負債(百萬元)", "流動資產(百萬元)", "流動負債(百萬元)", "總負債(百萬元)", "總資產(百萬元)", "應收款(百萬元)",
+  "20日均成交額(百萬元)", "本益比", "本淨比", "現金(百萬元)", "有息負債(百萬元)", "流動資產(百萬元)", "流動負債(百萬元)", "總負債(百萬元)", "總資產(百萬元)", "應收款(百萬元)",
   "存貨(百萬元)", "流動金融資產(百萬元)", "不動產廠房設備(百萬元)", "淨現金/市值", "流動比率", "負債/資產", "負債/現金", "保守清算價值(百萬元)", "清算覆蓋", "獲利年數",
-  "完整獲利年數", "正FCF年數", "近3月營收YoY", "單月營收YoY", "TTM營益率", "TTM淨利成長", "同業PER分位", "同業PBR分位", "同業營益率分位", "防禦分",
+  "完整獲利年數", "正FCF年數", "近3月營收YoY", "單月營收YoY", "TTM營益率", "TTM淨利成長", "同業本益比分位", "同業本淨比分位", "同業營益率分位", "防禦分",
   "估值分", "動能分", "總分", "硬門檻", "缺漏旗標",
 ];
 audit.getRange("A5:AS5").values = [auditHeaders];
@@ -446,9 +448,9 @@ if (chartRowCount) {
     titleTextStyle: { fontSize: 12 },
     categories: computed.map((row) => String(row[0] ?? "")),
     series: [
-      { name: "防禦", values: computed.map((row) => Number(row[1] ?? 0)), fill: { type: "solid", color: colors.teal } },
-      { name: "估值", values: computed.map((row) => Number(row[2] ?? 0)), fill: { type: "solid", color: "#2563EB" } },
-      { name: "動能", values: computed.map((row) => Number(row[3] ?? 0)), fill: { type: "solid", color: "#D97706" } },
+      { name: "防禦", values: computed.map((row) => Number(row[1] ?? 0)), fill: { type: "solid", color: scoreColors.first } },
+      { name: "估值", values: computed.map((row) => Number(row[2] ?? 0)), fill: { type: "solid", color: scoreColors.second } },
+      { name: "動能", values: computed.map((row) => Number(row[3] ?? 0)), fill: { type: "solid", color: scoreColors.third } },
     ],
     hasLegend: true,
     legend: { position: "bottom", textStyle: { fontSize: 10 } },
@@ -530,7 +532,7 @@ titleBand(sources, "A1:F1", "資料來源與方法限制");
 sources.getRange("A4:F4").values = [["來源ID", "資料集／項目", "資料日期", "提供者", "網址", "用途與限制"]];
 formatHeader(sources.getRange("A4:F4"));
 const sourceRows = [
-  ["FM-MKT", "TaiwanStockInfo / Price / PER / MarketValue", meta.latest_market_date, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Technical/", "市場、價格、市值與估值；資料更新依API實際回傳"],
+  ["FM-MKT", "TaiwanStockInfo / Price / 本益比 / MarketValue", meta.latest_market_date, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Technical/", "市場、價格、市值與估值；資料更新依API實際回傳"],
   ["FM-FUND", "BalanceSheet / FinancialStatements / CashFlows / MonthRevenue", meta.latest_financial_quarter, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Fundamental/", "財報與月營收；使用保守申報落後期"],
   ["FM-API", "FinMind API v4", meta.as_of, "FinMind", "https://api.finmindtrade.com/docs", "Backer 全市場指定日期查詢"],
   ["MODEL", "防禦型價值篩選模型", meta.as_of, "本專案", "", "商譽清算價值為0；金融業不使用一般公司模型；分數不構成投資建議"],
