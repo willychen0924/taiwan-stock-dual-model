@@ -22,6 +22,7 @@ cd "$ROOT"
 "$NODE_BIN" scripts/build_momentum_report.mjs \
   reports/momentum/latest/screening_results.json \
   "outputs/${AS_OF}/台股營運動能_${AS_OF}.xlsx"
+"$PYTHON_BIN" scripts/update_rankings_history.py
 "$PYTHON_BIN" scripts/cleanup_old_reports.py --as-of "$AS_OF" --keep-days 7
 
 print "完成：outputs/${AS_OF}/台股價值篩選_${AS_OF}.xlsx"
