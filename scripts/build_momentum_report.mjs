@@ -35,6 +35,7 @@ const explanation = workbook.worksheets.add("模型說明");
 const ranking = workbook.worksheets.add("動能排名");
 const rejected = workbook.worksheets.add("未通過明細");
 const audit = workbook.worksheets.add("試算稽核");
+const chartData = workbook.worksheets.add("圖表資料");
 const review = workbook.worksheets.add("人工複核");
 const assumptions = workbook.worksheets.add("參數");
 const checkSheet = workbook.worksheets.add("檢核");
@@ -55,7 +56,7 @@ const colors = {
   gray: "#64748B",
 };
 
-for (const sheet of [dashboard, explanation, ranking, rejected, audit, review, assumptions, checkSheet, sources]) {
+for (const sheet of [dashboard, explanation, ranking, rejected, audit, chartData, review, assumptions, checkSheet, sources]) {
   sheet.showGridLines = false;
 }
 
@@ -355,18 +356,45 @@ if (focusRows.length) {
   dashboard.getRange(`E9:H${8 + focusRows.length}`).format.numberFormat = "0.0";
   dashboard.getRange(`A8:H${8 + focusRows.length}`).format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
 }
-dashboard.getRange("J27:K27").values = [["公司", "總分"]];
-formatHeader(dashboard.getRange("J27:K27"));
-const chartRows = focusRows.slice(0, 10);
-if (chartRows.length) {
-  dashboard.getRange(`J28:J${27 + chartRows.length}`).values = chartRows.map((row) => [`${row.stock_id} ${row.stock_name}`]);
-  dashboard.getRange(`K28:K${27 + chartRows.length}`).formulas = chartRows.map((_, index) => [`=H${9 + index}`]);
-  dashboard.getRange(`K28:K${27 + chartRows.length}`).format.numberFormat = "0.0";
-  const chart = dashboard.charts.add("bar", dashboard.getRange(`J27:K${27 + chartRows.length}`));
-  chart.title = "Top 10 營運動能綜合分數";
-  chart.hasLegend = false;
-  chart.yAxis = { numberFormatCode: "0.0", min: 0, max: 100 };
-  chart.setPosition("J7", "Q24");
+titleBand(chartData, "A1:D1", "圖表資料｜前15名分數組成");
+chartData.getRange("A3:D3").values = [["公司", "營運動能", "動能品質", "估值流動性"]];
+formatHeader(chartData.getRange("A3:D3"));
+const chartRowCount = Math.min(15, focusRows.length);
+if (chartRowCount) {
+  chartData.getRange(`A4:D${3 + chartRowCount}`).formulas = Array.from({ length: chartRowCount }, (_, index) => {
+    const sourceRow = 6 + index;
+    return [
+      `='動能排名'!B${sourceRow}&" "&'動能排名'!C${sourceRow}`,
+      `='動能排名'!V${sourceRow}`,
+      `='動能排名'!W${sourceRow}`,
+      `='動能排名'!X${sourceRow}`,
+    ];
+  });
+  chartData.getRange(`B4:D${3 + chartRowCount}`).format.numberFormat = "0.0";
+  chartData.getRange(`A3:D${3 + chartRowCount}`).format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
+}
+chartData.freezePanes.freezeRows(3);
+setColumnWidth(chartData, "A", 20, 22);
+for (const col of ["B", "C", "D"]) setColumnWidth(chartData, col, 20, 16);
+if (chartRowCount) {
+  const computed = chartData.getRange(`A4:D${3 + chartRowCount}`).values;
+  const scoreChart = dashboard.charts.add("bar", {
+    title: "前15名分數組成",
+    titleTextStyle: { fontSize: 12 },
+    categories: computed.map((row) => String(row[0] ?? "")),
+    series: [
+      { name: "營運動能", values: computed.map((row) => Number(row[1] ?? 0)), fill: { type: "solid", color: colors.green } },
+      { name: "動能品質", values: computed.map((row) => Number(row[2] ?? 0)), fill: { type: "solid", color: "#2563EB" } },
+      { name: "估值流動性", values: computed.map((row) => Number(row[3] ?? 0)), fill: { type: "solid", color: colors.amber } },
+    ],
+    hasLegend: true,
+    legend: { position: "bottom", textStyle: { fontSize: 10 } },
+    barOptions: { direction: "column", grouping: "stacked", gapWidth: 60 },
+    yAxis: { numberFormatCode: "0.0", min: 0, max: 100 },
+    from: { row: 6, col: 9 },
+    extent: { widthPx: 820, heightPx: 400 },
+  });
+  scoreChart.yAxis = { numberFormatCode: "0.0", min: 0, max: 100 };
 }
 dashboard.getRange("L27:Q34").merge();
 dashboard.getRange("L27").values = [["營運動能排名不是買進建議。單月暴增、低基期、轉盈與一次性收益須人工覆核；月營收或季報更新時，營運排名變化才具有主要研究意義。"]];
@@ -497,6 +525,10 @@ const auditCheck = await workbook.inspect({
   kind: "table", range: `試算稽核!A1:AG${auditLastRow}`, include: "values,formulas", tableMaxRows: auditLastRow, tableMaxCols: 33, maxChars: 10000,
 });
 console.log("[QA] momentum formula audit", auditCheck.ndjson);
+const chartDataCheck = await workbook.inspect({
+  kind: "table", range: `圖表資料!A1:D${3 + chartRowCount}`, include: "values,formulas", tableMaxRows: 18, tableMaxCols: 4, maxChars: 5000,
+});
+console.log("[QA] momentum chart data", chartDataCheck.ndjson);
 const reviewCheck = await workbook.inspect({
   kind: "table", range: `人工複核!A1:L${Math.min(5 + focusRows.length, 12)}`, include: "values,formulas", tableMaxRows: 12, tableMaxCols: 12, maxChars: 7000,
 });
@@ -515,6 +547,7 @@ const renderSpecs = [
   ["未通過明細", `A1:F${Math.min(rejectedLastRow, 16)}`, "rejected.png"],
   ["試算稽核", `A1:R${auditLastRow}`, "audit_left.png"],
   ["試算稽核", `S1:AG${auditLastRow}`, "audit_right.png"],
+  ["圖表資料", `A1:D${Math.max(8, 3 + chartRowCount)}`, "chart_data.png"],
   ["人工複核", `A1:L${Math.max(12, 5 + focusRows.length)}`, "manual_review.png"],
   ["參數", "A1:E34", "assumptions.png"],
   ["檢核", `A1:G${5 + checks.length}`, "checks.png"],
