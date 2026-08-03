@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from value_screener.config import load_config  # noqa: E402
 from value_screener.history import append_history_records  # noqa: E402
 
 
@@ -46,7 +47,14 @@ def main() -> int:
     if not report_paths:
         raise FileNotFoundError("沒有可寫入排名歷史的日期報表")
 
-    appended = append_history_records(args.history, report_paths, root=ROOT)
+    screening_config = load_config(ROOT / "config" / "screening.json")
+    appended = append_history_records(
+        args.history,
+        report_paths,
+        root=ROOT,
+        min_revenue_coverage=float(screening_config["quality_checks"]["min_revenue_coverage"]),
+        financial_industries=screening_config["universe"]["financial_industries"],
+    )
     print(f"[排名歷史] 掃描 {len(report_paths)} 份報表，新增 {len(appended)} 份", flush=True)
     for record in appended:
         eligibility = "有效" if record["eligible_for_backtest"] else "不納入回測"

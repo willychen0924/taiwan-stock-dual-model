@@ -19,6 +19,7 @@ def validate_config(config: dict[str, Any]) -> None:
         "liquidation_haircuts",
         "score_targets",
         "weights",
+        "quality_checks",
         "report",
     }
     missing = required.difference(config)
@@ -34,6 +35,10 @@ def validate_config(config: dict[str, Any]) -> None:
     invalid = {key: value for key, value in haircuts.items() if not 0 <= float(value) <= 1}
     if invalid:
         raise ValueError(f"清算折價必須介於 0 與 1: {invalid}")
+
+    min_revenue_coverage = float(config["quality_checks"]["min_revenue_coverage"])
+    if not 0 <= min_revenue_coverage <= 1:
+        raise ValueError("營收覆蓋率門檻必須介於 0 與 1")
 
 
 def load_manual_review(path: Path) -> dict[str, dict[str, str]]:

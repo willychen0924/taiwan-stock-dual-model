@@ -8,6 +8,7 @@ from datetime import date
 from typing import Any, Iterable
 
 from .dates import previous_quarter
+from .quality import revenue_coverage_checks
 
 
 def as_number(value: Any) -> float | None:
@@ -40,25 +41,6 @@ def descending_score(value: float | None, best: float, worst: float, points: flo
     if value is None or worst == best:
         return 0.0
     return points * clamp((worst - value) / (worst - best))
-
-
-def hard_pass_revenue_coverage(rows: Iterable[dict[str, Any]]) -> float:
-    hard_pass_rows = [row for row in rows if row.get("hard_pass")]
-    if not hard_pass_rows:
-        return 0.0
-    return sum(row.get("revenue_3m_yoy") is not None for row in hard_pass_rows) / len(hard_pass_rows)
-
-
-def revenue_coverage_check(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    coverage = hard_pass_revenue_coverage(rows)
-    return {
-        "check": "排名母體營收覆蓋率",
-        "actual": coverage,
-        "expected": 0.80,
-        "tolerance": 0,
-        "status": "OK" if coverage >= 0.80 else "WARN",
-        "notes": "以量化硬門檻通過公司為分母，需有完整3M月營收年增率",
-    }
 
 
 def last_quarters(end: date, count: int) -> list[date]:
@@ -668,6 +650,12 @@ def analyze(
         sum(row["complete_profit_years"] == len(annual_years) for row in active_results) / max(1, active_count)
     )
     hard_pass_count = sum(row["hard_pass"] for row in results)
+    revenue_threshold = float(config["quality_checks"]["min_revenue_coverage"])
+    revenue_checks, revenue_metrics = revenue_coverage_checks(
+        results,
+        threshold=revenue_threshold,
+        financial_industries=financial_industries,
+    )
     checks = [
         {
             "check": "評分權重合計",
@@ -701,7 +689,7 @@ def analyze(
             "status": "OK" if profit_coverage >= 0.70 else "WARN",
             "notes": "新上市公司與資料缺漏會降低覆蓋",
         },
-        revenue_coverage_check(results),
+        *revenue_checks,
         {
             "check": "量化硬門檻通過數",
             "actual": hard_pass_count,
@@ -746,6 +734,9 @@ def analyze(
         "market_coverage": market_coverage,
         "balance_coverage": balance_coverage,
         "profit_history_coverage": profit_coverage,
+        "ranked_revenue_coverage": revenue_metrics["ranked_revenue_coverage"],
+        "universe_revenue_coverage": revenue_metrics["universe_revenue_coverage"],
+        "revenue_coverage_threshold": revenue_threshold,
         "unknown_debt_types": sorted(unknown_debt_types),
         "source_row_counts": {key: len(value) for key, value in datasets.items()},
     }

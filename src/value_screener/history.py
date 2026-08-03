@@ -6,44 +6,61 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from .quality import revenue_coverage_metrics
 
-HISTORY_SCHEMA_VERSION = 1
-MIN_REVENUE_COVERAGE = 0.80
-FINANCIAL_INDUSTRIES = {"金融保險", "金融業"}
-
-
-def _coverage(rows: list[dict[str, Any]], key: str) -> float:
-    if not rows:
-        return 0.0
-    return sum(row.get(key) is not None for row in rows) / len(rows)
+HISTORY_SCHEMA_VERSION = 2
+VOLATILE_METADATA_KEYS = {"created_at", "generated_at", "report_generated_at", "timestamp"}
 
 
-def build_history_record(payload: dict[str, Any], source_path: Path, *, root: Path) -> dict[str, Any]:
+def _semantic_sha256(payload: dict[str, Any]) -> str:
+    stable_payload = dict(payload)
+    stable_metadata = dict(payload.get("metadata", {}))
+    for key in VOLATILE_METADATA_KEYS:
+        stable_metadata.pop(key, None)
+    stable_payload["metadata"] = stable_metadata
+    canonical = json.dumps(stable_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def build_history_record(
+    payload: dict[str, Any],
+    source_path: Path,
+    *,
+    root: Path,
+    min_revenue_coverage: float,
+    financial_industries: Iterable[str],
+) -> dict[str, Any]:
     metadata = payload["metadata"]
     results = payload["results"]
     model_id = str(metadata.get("model_id") or "defensive_value")
     model_name = str(metadata.get("model_name") or "台股防禦型價值篩選")
     source_bytes = source_path.read_bytes()
     source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+    snapshot_sha256 = _semantic_sha256(payload)
     as_of = str(metadata["as_of"])
-    report_id = f"{model_id}:{as_of}:{source_sha256[:16]}"
+    report_id = f"{model_id}:{as_of}:{snapshot_sha256[:16]}"
 
     ranked_rows = [row for row in results if row.get("hard_pass")]
-    active_operating_rows = [
-        row
-        for row in results
-        if row.get("close") is not None and row.get("industry") not in FINANCIAL_INDUSTRIES
-    ]
-    ranked_revenue_coverage = _coverage(ranked_rows, "revenue_3m_yoy")
-    universe_revenue_coverage = _coverage(active_operating_rows, "revenue_3m_yoy")
+    revenue_metrics = revenue_coverage_metrics(results, financial_industries=financial_industries)
+    ranked_revenue_coverage = revenue_metrics["ranked_revenue_coverage"]
+    universe_revenue_coverage = revenue_metrics["universe_revenue_coverage"]
 
     ineligible_reasons: list[str] = []
-    if metadata.get("model_status") != "OK":
-        ineligible_reasons.append(f"模型狀態為 {metadata.get('model_status') or 'UNKNOWN'}")
-    if ranked_revenue_coverage < MIN_REVENUE_COVERAGE:
-        ineligible_reasons.append("排名母體營收覆蓋率低於80%")
-    if universe_revenue_coverage < MIN_REVENUE_COVERAGE:
-        ineligible_reasons.append("一般公司營收覆蓋率低於80%")
+    source_model_status = str(metadata.get("model_status") or "UNKNOWN")
+    if source_model_status != "OK":
+        ineligible_reasons.append(f"來源模型狀態為 {source_model_status}")
+    threshold_label = f"{min_revenue_coverage:.0%}"
+    if ranked_revenue_coverage < min_revenue_coverage:
+        ineligible_reasons.append(f"排名母體營收覆蓋率低於{threshold_label}")
+    if universe_revenue_coverage < min_revenue_coverage:
+        ineligible_reasons.append(f"一般公司營收覆蓋率低於{threshold_label}")
+    effective_model_status = (
+        "FAIL"
+        if source_model_status == "FAIL"
+        else "WARN"
+        if ineligible_reasons
+        else "OK"
+    )
 
     try:
         source_relative = str(source_path.resolve().relative_to(root.resolve()))
@@ -67,6 +84,7 @@ def build_history_record(payload: dict[str, Any], source_path: Path, *, root: Pa
         "report_id": report_id,
         "source_path": source_relative,
         "source_sha256": source_sha256,
+        "snapshot_sha256": snapshot_sha256,
         "model_id": model_id,
         "model_name": model_name,
         "config_version": payload.get("config", {}).get("version"),
@@ -74,10 +92,13 @@ def build_history_record(payload: dict[str, Any], source_path: Path, *, root: Pa
         "latest_market_date": str(metadata.get("latest_market_date") or ""),
         "latest_revenue_period": str(metadata.get("latest_revenue_period") or ""),
         "latest_financial_quarter": str(metadata.get("latest_financial_quarter") or ""),
-        "model_status": str(metadata.get("model_status") or ""),
+        "model_status": source_model_status,
+        "source_model_status": source_model_status,
+        "effective_model_status": effective_model_status,
         "hard_pass_count": int(metadata.get("hard_pass_count") or 0),
         "ranked_revenue_coverage": ranked_revenue_coverage,
         "universe_revenue_coverage": universe_revenue_coverage,
+        "revenue_coverage_threshold": min_revenue_coverage,
         "eligible_for_backtest": not ineligible_reasons,
         "ineligible_reasons": ineligible_reasons,
         "rankings": rankings,
@@ -89,9 +110,17 @@ def append_history_records(
     report_paths: Iterable[Path],
     *,
     root: Path,
+    min_revenue_coverage: float,
+    financial_industries: Iterable[str],
 ) -> list[dict[str, Any]]:
     records = [
-        build_history_record(json.loads(path.read_text(encoding="utf-8")), path, root=root)
+        build_history_record(
+            json.loads(path.read_text(encoding="utf-8")),
+            path,
+            root=root,
+            min_revenue_coverage=min_revenue_coverage,
+            financial_industries=financial_industries,
+        )
         for path in report_paths
     ]
     history_path.parent.mkdir(parents=True, exist_ok=True)

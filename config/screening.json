@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "universe": {
     "markets": ["twse", "tpex"],
     "stock_id_pattern": "^[0-9]{4}$",
@@ -44,6 +44,9 @@
     "defense": 50,
     "valuation": 30,
     "momentum": 20
+  },
+  "quality_checks": {
+    "min_revenue_coverage": 0.8
   },
   "report": {
     "watchlist_size": 100,

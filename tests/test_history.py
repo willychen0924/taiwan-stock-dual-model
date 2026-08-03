@@ -13,6 +13,12 @@ sys.path.insert(0, str(ROOT / "src"))
 from value_screener.history import append_history_records, build_history_record  # noqa: E402
 
 
+HISTORY_KWARGS = {
+    "min_revenue_coverage": 0.8,
+    "financial_industries": {"金融業"},
+}
+
+
 def payload(*, as_of: str, status: str = "OK", complete_revenue: bool = True, ranked: bool = True) -> dict:
     row = {
         "stock_id": "1234",
@@ -52,18 +58,20 @@ class RankingHistoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             path = self.write_report(root, "report.json", payload(as_of="2026-08-01", status="WARN", ranked=False))
-            record = build_history_record(json.loads(path.read_text()), path, root=root)
+            record = build_history_record(json.loads(path.read_text()), path, root=root, **HISTORY_KWARGS)
             self.assertEqual(record["rankings"], [])
             self.assertFalse(record["eligible_for_backtest"])
-            self.assertIn("模型狀態為 WARN", record["ineligible_reasons"])
+            self.assertIn("來源模型狀態為 WARN", record["ineligible_reasons"])
 
     def test_incomplete_revenue_is_not_eligible_even_when_status_is_ok(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             path = self.write_report(root, "report.json", payload(as_of="2026-08-01", complete_revenue=False))
-            record = build_history_record(json.loads(path.read_text()), path, root=root)
+            record = build_history_record(json.loads(path.read_text()), path, root=root, **HISTORY_KWARGS)
             self.assertFalse(record["eligible_for_backtest"])
             self.assertEqual(record["ranked_revenue_coverage"], 0)
+            self.assertEqual(record["source_model_status"], "OK")
+            self.assertEqual(record["effective_model_status"], "WARN")
 
     def test_repeated_append_is_idempotent_and_does_not_truncate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -72,14 +80,30 @@ class RankingHistoryTests(unittest.TestCase):
             second = self.write_report(root, "second.json", payload(as_of="2026-08-03"))
             history = root / "rankings_history.jsonl"
 
-            self.assertEqual(len(append_history_records(history, [first], root=root)), 1)
-            self.assertEqual(len(append_history_records(history, [first], root=root)), 0)
-            self.assertEqual(len(append_history_records(history, [first, second], root=root)), 1)
+            self.assertEqual(len(append_history_records(history, [first], root=root, **HISTORY_KWARGS)), 1)
+            self.assertEqual(len(append_history_records(history, [first], root=root, **HISTORY_KWARGS)), 0)
+            self.assertEqual(
+                len(append_history_records(history, [first, second], root=root, **HISTORY_KWARGS)),
+                1,
+            )
 
             records = [json.loads(line) for line in history.read_text().splitlines()]
             self.assertEqual(len(records), 2)
             self.assertEqual({record["as_of"] for record in records}, {"2026-08-01", "2026-08-03"})
             self.assertEqual({record["latest_market_date"] for record in records}, {"2026-07-31"})
+
+    def test_volatile_timestamp_does_not_create_duplicate_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            report = payload(as_of="2026-08-03")
+            report["metadata"]["generated_at"] = "2026-08-03T08:00:00+08:00"
+            path = self.write_report(root, "report.json", report)
+            history = root / "rankings_history.jsonl"
+            self.assertEqual(len(append_history_records(history, [path], root=root, **HISTORY_KWARGS)), 1)
+
+            report["metadata"]["generated_at"] = "2026-08-03T09:00:00+08:00"
+            self.write_report(root, "report.json", report)
+            self.assertEqual(len(append_history_records(history, [path], root=root, **HISTORY_KWARGS)), 0)
 
 
 if __name__ == "__main__":

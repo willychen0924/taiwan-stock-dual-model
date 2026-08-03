@@ -12,13 +12,12 @@ sys.path.insert(0, str(ROOT / "src"))
 from value_screener.config import validate_config  # noqa: E402
 from value_screener.model import (  # noqa: E402
     descending_score,
-    hard_pass_revenue_coverage,
     linear_score,
     parse_balance,
     parse_cashflow,
-    revenue_coverage_check,
     revenue_window_yoy,
 )
+from value_screener.quality import revenue_coverage_checks  # noqa: E402
 from value_screener.dates import latest_complete_quarter  # noqa: E402
 from value_screener.pipeline import _require_latest_snapshots, _select_recent_trading_dates  # noqa: E402
 from datetime import date
@@ -37,17 +36,18 @@ class ScoreTests(unittest.TestCase):
 
     def test_revenue_coverage_uses_only_hard_pass_rows(self) -> None:
         rows = [
-            {"hard_pass": True, "revenue_3m_yoy": 0.1},
-            {"hard_pass": True, "revenue_3m_yoy": None},
-            {"hard_pass": False, "revenue_3m_yoy": 0.2},
+            {"hard_pass": True, "close": 10, "industry": "半導體業", "revenue_3m_yoy": 0.1},
+            {"hard_pass": True, "close": 10, "industry": "半導體業", "revenue_3m_yoy": None},
+            {"hard_pass": False, "close": 10, "industry": "半導體業", "revenue_3m_yoy": 0.2},
         ]
-        self.assertEqual(hard_pass_revenue_coverage(rows), 0.5)
-        self.assertEqual(hard_pass_revenue_coverage([]), 0.0)
-        self.assertEqual(revenue_coverage_check(rows)["status"], "WARN")
-        self.assertEqual(
-            revenue_coverage_check([{"hard_pass": True, "revenue_3m_yoy": 0.1}])["status"],
-            "OK",
+        checks, metrics = revenue_coverage_checks(
+            rows,
+            threshold=0.8,
+            financial_industries={"金融業"},
         )
+        self.assertEqual(metrics["ranked_revenue_coverage"], 0.5)
+        self.assertEqual(metrics["universe_revenue_coverage"], 2 / 3)
+        self.assertEqual([item["status"] for item in checks], ["WARN", "WARN"])
 
 
 class FinancialParsingTests(unittest.TestCase):
