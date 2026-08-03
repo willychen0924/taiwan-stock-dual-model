@@ -230,9 +230,9 @@ titleBand(dashboard, "A1:Q1", "台股高品質營運動能篩選儀表板");
 dashboard.getRange("A2:Q2").merge();
 dashboard.getRange("A2").values = [[`市場資料 ${meta.latest_market_date}｜營收期 ${meta.latest_revenue_period}｜財報季 ${meta.latest_financial_quarter}｜僅供研究篩選，非投資建議`]];
 dashboard.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
-const cardLabels = ["普通股母體", "動能門檻通過", "觀察前100", "精華20", "轉機觀察", "模型狀態"];
-const cardValues = [meta.universe_count, meta.hard_pass_count, meta.watchlist_count, meta.focus_count, meta.turnaround_count, meta.model_status];
-for (let index = 0; index < 6; index += 1) {
+const cardLabels = ["普通股母體", "動能門檻通過", "觀察前100", "精華20", "轉機觀察", "前期資料不足", "模型狀態"];
+const cardValues = [meta.universe_count, meta.hard_pass_count, meta.watchlist_count, meta.focus_count, meta.turnaround_count, meta.insufficient_history_count, meta.model_status];
+for (let index = 0; index < 7; index += 1) {
   const startCol = String.fromCharCode("A".charCodeAt(0) + index * 2);
   const endCol = String.fromCharCode(startCol.charCodeAt(0) + 1);
   dashboard.getRange(`${startCol}4:${endCol}4`).merge();
@@ -240,7 +240,7 @@ for (let index = 0; index < 6; index += 1) {
   dashboard.getRange(`${startCol}4`).values = [[cardLabels[index]]];
   dashboard.getRange(`${startCol}5`).values = [[cardValues[index]]];
   dashboard.getRange(`${startCol}4:${endCol}4`).format = { fill: colors.lightGray, font: { bold: true, color: colors.gray }, horizontalAlignment: "center" };
-  dashboard.getRange(`${startCol}5:${endCol}5`).format = { font: { bold: true, color: index === 5 ? colors.green : colors.amber, size: 16 }, horizontalAlignment: "center" };
+  dashboard.getRange(`${startCol}5:${endCol}5`).format = { font: { bold: true, color: index === 6 ? colors.green : colors.amber, size: 16 }, horizontalAlignment: "center" };
 }
 dashboard.getRange("A7:H7").merge();
 dashboard.getRange("A7").values = [["營運動能精華候選（仍需成長來源與治理質化覆核）"]];

@@ -8,7 +8,7 @@ from datetime import date
 from typing import Any, Iterable
 
 from .dates import previous_quarter
-from .quality import revenue_coverage_checks
+from .quality import aggregate_check_status, revenue_coverage_checks
 
 
 def as_number(value: Any) -> float | None:
@@ -707,12 +707,16 @@ def analyze(
             "notes": "需定期檢視 FinMind XBRL 標籤變化",
         },
     ]
-    if any(item["status"] == "FAIL" for item in checks):
-        model_status = "FAIL"
-    elif any(item["status"] == "WARN" for item in checks):
-        model_status = "WARN"
-    else:
-        model_status = "OK"
+    data_check_names = {
+        "市值資料覆蓋率",
+        "資產負債表覆蓋率",
+        "五年獲利資料覆蓋率",
+        "排名母體營收覆蓋率",
+        "一般公司營收覆蓋率",
+        "未識別有息負債標籤",
+    }
+    data_status = aggregate_check_status(item for item in checks if item["check"] in data_check_names)
+    model_status = aggregate_check_status(checks)
 
     metadata = {
         "as_of": as_of.isoformat(),
@@ -731,6 +735,7 @@ def analyze(
         "watchlist_count": min(hard_pass_count, watchlist_size),
         "focus_count": min(hard_pass_count, focus_size),
         "model_status": model_status,
+        "data_status": data_status,
         "market_coverage": market_coverage,
         "balance_coverage": balance_coverage,
         "profit_history_coverage": profit_coverage,

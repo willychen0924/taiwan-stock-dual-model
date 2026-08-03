@@ -1,4 +1,5 @@
 {
+  "version": "0.1.1",
   "model": {
     "id": "operating_momentum",
     "name": "台股高品質營運動能篩選"
@@ -57,6 +58,11 @@
     "per_best": 10.0,
     "per_worst": 50.0,
     "turnover_target_twd": 100000000
+  },
+  "quality_checks": {
+    "min_revenue_acceleration_coverage": 0.8,
+    "min_margin_change_coverage": 0.7,
+    "min_cash_conversion_coverage": 0.65
   },
   "report": {
     "watchlist_size": 100,

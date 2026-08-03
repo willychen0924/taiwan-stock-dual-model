@@ -122,7 +122,7 @@ def _build_momentum_html(result: dict[str, Any]) -> str:
 <style>
 body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;margin:0;background:#f3f7f4;color:#17302a}}
 .wrap{{max-width:1380px;margin:0 auto;padding:32px}} .hero{{background:#173f35;color:white;border-radius:18px;padding:28px 32px}}
-.hero h1{{margin:0 0 8px;font-size:28px}} .hero p{{margin:0;color:#cbe2d9}} .cards{{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0}}
+.hero h1{{margin:0 0 8px;font-size:28px}} .hero p{{margin:0;color:#cbe2d9}} .cards{{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin:18px 0}}
 .card{{background:white;border-radius:14px;padding:18px;box-shadow:0 2px 14px #153d3014}} .card b{{display:block;font-size:24px;color:#b45309}} .card span{{font-size:13px;color:#64748b}}
 .warning{{background:#fff7d6;border-left:4px solid #d97706;padding:12px 16px;margin:16px 0}} .panel{{background:white;border-radius:14px;padding:20px;margin-top:18px;overflow:auto;box-shadow:0 2px 14px #153d3014}}
 table{{width:100%;border-collapse:collapse;font-size:13px}} th{{background:#173f35;color:white;text-align:left;padding:10px;white-space:nowrap}} td{{padding:9px 10px;border-bottom:1px solid #e4ece8;white-space:nowrap}}
@@ -135,7 +135,7 @@ td.summary{{min-width:30rem;white-space:normal;line-height:1.6}} tr:hover td{{ba
 <div class="cards">
 <div class="card"><b>{meta['universe_count']:,}</b><span>普通股母體</span></div><div class="card"><b>{meta['hard_pass_count']:,}</b><span>動能門檻通過</span></div>
 <div class="card"><b>{meta['watchlist_count']:,}</b><span>觀察前100</span></div><div class="card"><b>{meta['focus_count']:,}</b><span>精華20</span></div>
-<div class="card"><b>{meta['turnaround_count']:,}</b><span>轉機觀察</span></div><div class="card"><b>{html.escape(meta['model_status'])}</b><span>模型狀態</span></div>
+<div class="card"><b>{meta['turnaround_count']:,}</b><span>轉機觀察</span></div><div class="card"><b>{meta['insufficient_history_count']:,}</b><span>前期資料不足</span></div><div class="card"><b>{html.escape(meta['model_status'])}</b><span>模型狀態</span></div>
 </div>{warning}
 <div class="panel"><h2>營運動能精華候選</h2><table><thead><tr><th>排名</th><th>代碼</th><th>公司</th><th>產業</th><th>總分</th><th>近3月營收</th><th>營收加速度</th><th>TTM淨利成長</th><th>營益率變化</th><th>模型短評（自動）</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
 <div class="panel copy"><h2>模型說明</h2><h3>核心概念</h3><p>本模型以高品質營運動能為核心，尋找營收、獲利與營益率正在改善，而且成長能獲得現金流與財務體質支持的公司。模型關注企業營運是否加速，而不是短期股價上漲；單月暴增、低基期轉盈及一次性收益須另行覆核。</p>

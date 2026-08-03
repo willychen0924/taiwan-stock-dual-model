@@ -3,6 +3,15 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 
+def aggregate_check_status(checks: Iterable[dict[str, Any]]) -> str:
+    statuses = {str(item.get("status") or "WARN") for item in checks}
+    if "FAIL" in statuses:
+        return "FAIL"
+    if statuses != {"OK"}:
+        return "WARN"
+    return "OK"
+
+
 def _coverage(rows: list[dict[str, Any]], key: str) -> float:
     if not rows:
         return 0.0
