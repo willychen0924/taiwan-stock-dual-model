@@ -6,9 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from .portal_layout import (
-    COLS_INTERSECTION,
-    COLS_MOMENTUM,
-    COLS_VALUE,
     SCORE_COLORS,
     detail_block,
     esc,
@@ -83,7 +80,8 @@ def _identity_cells(row: dict[str, Any], comparison: dict[str, Any]) -> list[str
     ]
 
 
-def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict) -> str:
+def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict,
+                *, expandable: bool = True) -> str:
     out = []
     for row in rows:
         extra = enrichment.get(str(row.get("stock_id")), {})
@@ -102,11 +100,12 @@ def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichme
             f'<span class="n">{percent(row.get("revenue_3m_yoy"))}</span>',
             signal_cells(extra),
         ]
-        out.append(list_row(str(row.get("stock_id")), cells, COLS_VALUE, detail=detail_block(row, extra)))
+        out.append(list_row(cells, "lgrid-model", detail=detail_block(row, extra) if expandable else ""))
     return "".join(out)
 
 
-def _momentum_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict) -> str:
+def _momentum_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict,
+                   *, expandable: bool = True) -> str:
     out = []
     for row in rows:
         extra = enrichment.get(str(row.get("stock_id")), {})
@@ -125,12 +124,12 @@ def _momentum_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enric
             f'<span class="n">{number(row.get("cash_conversion"), 2)}</span>',
             signal_cells(extra),
         ]
-        out.append(list_row(str(row.get("stock_id")), cells, COLS_MOMENTUM, detail=detail_block(row, extra)))
+        out.append(list_row(cells, "lgrid-model", detail=detail_block(row, extra) if expandable else ""))
     return "".join(out)
 
 
-def _listing(head: list[tuple[str, str]], cols: str, body: str) -> str:
-    return f'<div class="listwrap">{head_row(head, cols)}{body}</div>'
+def _listing(head: list[tuple[str, str]], grid_class: str, body: str) -> str:
+    return f'<div class="listwrap">{head_row(head, grid_class)}{body}</div>'
 
 
 def build_combined_html(
@@ -179,9 +178,9 @@ def build_combined_html(
                 f'<span class="n tot">{float(m.get("total_score") or 0):.1f}</span>',
                 signal_cells(extra),
             ]
-            rows.append(list_row(sid, cells, COLS_INTERSECTION, detail=detail_block(v, extra)))
+            rows.append(list_row(cells, "lgrid-inter", detail=detail_block(v, extra)))
         if rows:
-            intersection = _NOTE_INTERSECTION + _listing(_HEAD_INTERSECTION, COLS_INTERSECTION, "".join(rows))
+            intersection = _NOTE_INTERSECTION + _listing(_HEAD_INTERSECTION, "lgrid-inter", "".join(rows))
         else:
             intersection = '<p class="empty">本次兩邊精華20沒有交集。</p>'
         intersection_note = (
@@ -269,15 +268,15 @@ def build_combined_html(
 <section class="panel" id="p-momentum">
   <p class="note">{rank_comparison_note(momentum_comparison)}</p>
   {_LEGEND_MOMENTUM}
-  {_listing(_HEAD_MOMENTUM, COLS_MOMENTUM, _momentum_rows(momentum_focus, momentum_comparison, enrichment))}
-  {watchlist(momentum_rest, "觀察前100", _listing(_HEAD_MOMENTUM, COLS_MOMENTUM, _momentum_rows(momentum_rest, momentum_comparison, enrichment)))}
+  {_listing(_HEAD_MOMENTUM, "lgrid-model", _momentum_rows(momentum_focus, momentum_comparison, enrichment))}
+  {watchlist(momentum_rest, "觀察前100", _listing(_HEAD_MOMENTUM, "lgrid-model", _momentum_rows(momentum_rest, momentum_comparison, enrichment, expandable=False)))}
 </section>
 
 <section class="panel" id="p-value">
   <p class="note">{rank_comparison_note(value_comparison)}</p>
   {_LEGEND_VALUE}
-  {_listing(_HEAD_VALUE, COLS_VALUE, _value_rows(value_focus, value_comparison, enrichment))}
-  {watchlist(value_rest, "自選100", _listing(_HEAD_VALUE, COLS_VALUE, _value_rows(value_rest, value_comparison, enrichment)))}
+  {_listing(_HEAD_VALUE, "lgrid-model", _value_rows(value_focus, value_comparison, enrichment))}
+  {watchlist(value_rest, "自選100", _listing(_HEAD_VALUE, "lgrid-model", _value_rows(value_rest, value_comparison, enrichment, expandable=False)))}
 </section>
 
 <section class="panel" id="p-inter">

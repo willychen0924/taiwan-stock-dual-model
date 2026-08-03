@@ -67,7 +67,7 @@ class CombinedReportTests(unittest.TestCase):
         self.assertIn('id="t-momentum" class="tabin" checked', page)
         for key in ("p-momentum", "p-value", "p-inter"):
             self.assertIn(f'#t-{key.split("-")[1]}:checked', page)
-        self.assertIn('<details class="lrow"', page)
+        self.assertIn('<details class="lrow lgrid-', page)
 
     def test_radio_inputs_precede_every_element_they_control(self) -> None:
         """純 CSS 分頁靠 ~ 兄弟選擇器；radio 若被包進卡片，面板會全部隱藏。"""

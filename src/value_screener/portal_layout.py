@@ -46,21 +46,21 @@ def number(value: Any, digits: int = 1) -> str:
 def score_bar(segments: list[tuple[str, Any, str]]) -> str:
     """固定 100 分尺度；未取得的分數留灰，不重新正規化。"""
     used = 0.0
-    parts = []
+    parts: list[str] = []
+    labels: list[str] = []
     for label, raw, color in segments:
         value = max(0.0, float(raw or 0.0))
         used += value
-        parts.append(
-            f'<i style="width:{min(value, 100.0):.4f}%;background:{color}" '
-            f'title="{esc(label)} {value:.1f}"></i>'
-        )
-    parts.append(f'<i style="width:{max(0.0, 100.0 - used):.4f}%"></i>')
-    return f'<span class="bar">{"".join(parts)}</span>'
+        labels.append(f"{label} {value:.1f}")
+        parts.append(f'<i style="width:{min(value, 100.0):.2f}%;background:{color}"></i>')
+    parts.append(f'<i style="width:{max(0.0, 100.0 - used):.2f}%"></i>')
+    # 整條給一個 aria-label 就夠；逐段 title 在 200 列的頁面上是純粹的體積
+    return f'<span class="bar" role="img" aria-label="{esc("／".join(labels))}">{"".join(parts)}</span>'
 
 
-def head_row(columns: list[tuple[str, str]], cols: str) -> str:
+def head_row(columns: list[tuple[str, str]], grid_class: str) -> str:
     cells = "".join(f'<span class="{css}">{label}</span>' for label, css in columns)
-    return f'<div class="lhead" style="--cols:{cols};--minw:{grid_min_width(cols)}px">{cells}</div>'
+    return f'<div class="lhead {grid_class}">{cells}</div>'
 
 
 def signal_cells(extra: dict[str, str]) -> str:
@@ -100,23 +100,18 @@ def detail_block(row: dict[str, Any], extra: dict[str, str]) -> str:
     return f'<dl class="dwrap">{"".join(lines)}</dl>'
 
 
-def list_row(
-    stock_id: str,
-    cells: list[str],
-    cols: str,
-    *,
-    detail: str,
-    extra_class: str = "",
-) -> str:
-    classes = f"lrow {extra_class}".strip()
-    return (
-        f'<details class="{classes}" style="--cols:{cols};--minw:{grid_min_width(cols)}px">'
-        f'<summary>{"".join(cells)}</summary>{detail}</details>'
-    )
+def list_row(cells: list[str], grid_class: str, *, detail: str = "") -> str:
+    """一列一檔。detail 為空時該列不可展開（第 21–100 名採此形式，避免頁面過大）。"""
+    body = f'<summary>{"".join(cells)}</summary>{detail}'
+    if not detail:
+        return f'<div class="lrow flatrow {grid_class}"><div class="rowline">{"".join(cells)}</div></div>'
+    return f'<details class="lrow {grid_class}">{body}</details>'
 
 
 def portal_css() -> str:
     first, second, third = SCORE_COLORS["first"], SCORE_COLORS["second"], SCORE_COLORS["third"]
+    model_cols, inter_cols = COLS_VALUE, COLS_INTERSECTION
+    model_min, inter_min = grid_min_width(COLS_VALUE), grid_min_width(COLS_INTERSECTION)
     return f"""
 *{{box-sizing:border-box}}
 body{{margin:0;background:#faf6ef;color:#251f19;font-size:13px;
@@ -172,7 +167,9 @@ body{{margin:0;background:#faf6ef;color:#251f19;font-size:13px;
 
 .listwrap{{background:#fffdfa;border:1px solid rgba(37,31,25,.09);border-radius:16px;
  overflow-x:auto;box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}}
-.lhead,.lrow>summary{{display:grid;grid-template-columns:var(--cols);align-items:center;
+.lgrid-model{{--cols:{model_cols};--minw:{model_min}px}}
+.lgrid-inter{{--cols:{inter_cols};--minw:{inter_min}px}}
+.lrow.flatrow>.rowline,.lhead,.lrow>summary{{display:grid;grid-template-columns:var(--cols);align-items:center;
  gap:0 {_COLUMN_GAP}px;padding:0 16px;min-width:var(--minw,1200px);width:100%}}
 .lhead{{background:#f6efe4;border-bottom:1px solid #ece2d4;color:#6d6055;font-size:11.5px;
  font-weight:700;padding-top:9px;padding-bottom:9px;position:sticky;top:0;z-index:2;
@@ -187,6 +184,7 @@ body{{margin:0;background:#faf6ef;color:#251f19;font-size:13px;
 .lhead .k3:before{{background:{third}}}
 
 .lrow{{border-bottom:1px solid #f1e8db;min-width:var(--minw,1200px)}}
+.lrow.flatrow>.rowline{{padding-top:11px;padding-bottom:11px;font-size:13.5px}}
 .lrow>summary{{list-style:none;cursor:pointer;padding-top:11px;padding-bottom:11px;font-size:13.5px}}
 .lrow>summary::-webkit-details-marker{{display:none}}
 .lrow>summary:hover{{background:#f3ebde}}
