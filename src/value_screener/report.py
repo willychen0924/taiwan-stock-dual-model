@@ -7,6 +7,14 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from .report_common import (
+    build_checks_panel,
+    build_freshness_banner,
+    format_rank_change,
+    load_rank_comparison,
+    rank_comparison_note,
+)
+
 
 CSV_FIELDS = [
     "rank",
@@ -193,7 +201,12 @@ def build_model_summary(row: dict[str, Any], min_turnover: float = 20_000_000) -
     return summary
 
 
-def write_reports(result: dict[str, Any], reports_root: Path) -> dict[str, Path]:
+def write_reports(
+    result: dict[str, Any],
+    reports_root: Path,
+    *,
+    history_path: Path | None = None,
+) -> dict[str, Path]:
     as_of = result["metadata"]["as_of"]
     dated_dir = reports_root / as_of
     latest_dir = reports_root / "latest"
@@ -216,7 +229,7 @@ def write_reports(result: dict[str, Any], reports_root: Path) -> dict[str, Path]
         writer.writeheader()
         writer.writerows(result["results"])
 
-    html_path.write_text(_build_html(result), encoding="utf-8")
+    html_path.write_text(_build_html(result, history_path=history_path), encoding="utf-8")
 
     for source in (json_path, csv_path, html_path):
         shutil.copy2(source, latest_dir / source.name)
@@ -235,14 +248,16 @@ def _format_percent(value: Any) -> str:
     return f"{float(value):.1%}"
 
 
-def _build_html(result: dict[str, Any]) -> str:
+def _build_html(result: dict[str, Any], *, history_path: Path | None = None) -> str:
     meta = result["metadata"]
+    comparison = load_rank_comparison(result, history_path)
     focus = [row for row in result["results"] if row["hard_pass"]][: result["config"]["report"]["focus_size"]]
     rows = []
     for row in focus:
         rows.append(
             "<tr>"
             f"<td>{row['rank']}</td>"
+            f"<td class=\"rank-change\">{format_rank_change(row, comparison)}</td>"
             f"<td><strong>{html.escape(row['stock_id'])}</strong></td>"
             f"<td>{html.escape(row['stock_name'])}</td>"
             f"<td>{html.escape(row['industry'])}</td>"
@@ -255,9 +270,9 @@ def _build_html(result: dict[str, Any]) -> str:
             f"<td>{html.escape(row['governance_status'])}</td>"
             "</tr>"
         )
-    warning = ""
-    if meta["model_status"] != "OK":
-        warning = f'<div class="warning">模型檢核狀態：{html.escape(meta["model_status"])}。請先查看 Excel 的「檢核」工作表。</div>'
+    freshness = build_freshness_banner(meta)
+    checks_panel = build_checks_panel(result.get("checks", []))
+    comparison_note = rank_comparison_note(comparison)
     return f"""<!doctype html>
 <html lang="zh-Hant">
 <head>
@@ -269,26 +284,28 @@ body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",san
 .wrap{{max-width:1280px;margin:0 auto;padding:32px}}
 .hero{{background:#12263f;color:white;border-radius:18px;padding:28px 32px}}
 .hero h1{{margin:0 0 8px;font-size:28px}} .hero p{{margin:0;color:#c8d6e5}}
+.freshness{{margin-top:14px;padding:10px 14px;border-radius:10px;font-size:14px;font-weight:650}} .freshness.good{{background:#dcfce7;color:#14532d}} .freshness.bad{{background:#fee2e2;color:#991b1b}}
 .cards{{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:18px 0}}
 .card{{background:white;border-radius:14px;padding:18px;box-shadow:0 2px 14px #15324f14}}
 .card b{{display:block;font-size:24px;color:#0f766e}} .card span{{font-size:13px;color:#64748b}}
-.warning{{background:#fff7d6;border-left:4px solid #d97706;padding:12px 16px;margin:16px 0}}
-.panel{{background:white;border-radius:14px;padding:20px;overflow:auto;box-shadow:0 2px 14px #15324f14}}
+.panel{{background:white;border-radius:14px;padding:20px;margin-top:18px;overflow:auto;box-shadow:0 2px 14px #15324f14}}
 table{{width:100%;border-collapse:collapse;font-size:13px}} th{{background:#12263f;color:white;text-align:left;padding:10px;white-space:nowrap}}
-td{{padding:9px 10px;border-bottom:1px solid #e7edf4;white-space:nowrap}} td.summary{{min-width:30rem;white-space:normal;line-height:1.6}} tr:hover td{{background:#f0fdfa}}
+td{{padding:9px 10px;border-bottom:1px solid #e7edf4;white-space:nowrap}} td.summary,td.check-note{{min-width:24rem;white-space:normal;line-height:1.6}} td.rank-change{{font-weight:700}} tr:hover td{{background:#f0fdfa}}
+.status{{display:inline-block;padding:3px 9px;border-radius:999px;font-weight:750}} .status.ok{{background:#dcfce7;color:#166534}} .status.warn{{background:#fef3c7;color:#92400e}} .status.fail{{background:#fee2e2;color:#991b1b}}
 .note{{margin-top:18px;color:#526174;font-size:13px;line-height:1.7}}
 @media(max-width:900px){{.cards{{grid-template-columns:repeat(2,1fr)}}.wrap{{padding:16px}}}}
 </style>
 </head>
 <body><div class="wrap">
-<div class="hero"><h1>台股防禦型價值篩選</h1><p>資料日 {html.escape(meta['latest_market_date'])}｜完整財報季 {html.escape(meta['latest_financial_quarter'])}｜研究候選，不是買進建議</p></div>
+<div class="hero"><h1>台股防禦型價值篩選</h1><p>資料日 {html.escape(meta['latest_market_date'])}｜完整財報季 {html.escape(meta['latest_financial_quarter'])}｜研究候選，不是買進建議</p>{freshness}</div>
 <div class="cards">
 <div class="card"><b>{meta['universe_count']:,}</b><span>普通股母體</span></div>
 <div class="card"><b>{meta['operating_company_count']:,}</b><span>一般公司模型</span></div>
 <div class="card"><b>{meta['hard_pass_count']:,}</b><span>硬門檻通過</span></div>
 <div class="card"><b>{meta['watchlist_count']:,}</b><span>自選 100</span></div>
 <div class="card"><b>{meta['focus_count']:,}</b><span>精華 20</span></div>
-</div>{warning}
-<div class="panel"><h2>精華候選</h2><table><thead><tr><th>排名</th><th>代碼</th><th>公司</th><th>產業</th><th>總分</th><th>PER</th><th>淨現金/市值</th><th>清算覆蓋</th><th>近3月營收YoY</th><th>模型短評（自動）</th><th>治理</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
+</div>
+<div class="panel"><h2>精華候選</h2><p class="note">{comparison_note}</p><table><thead><tr><th>排名</th><th>較前次</th><th>代碼</th><th>公司</th><th>產業</th><th>總分</th><th>PER</th><th>淨現金/市值</th><th>清算覆蓋</th><th>近3月營收YoY</th><th>模型短評（自動）</th><th>治理</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
+{checks_panel}
 <p class="note">量化分數只負責縮小研究範圍。治理誠信、競爭優勢、AI／機器人／矽光子等催化必須經法說、年報與公開資訊人工查證。清算價值採折價估計，商譽預設為零，不保證股價下檔。</p>
 </div></body></html>"""

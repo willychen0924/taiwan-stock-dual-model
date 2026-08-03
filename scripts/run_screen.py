@@ -43,13 +43,18 @@ def main() -> int:
         force=args.force,
         include_as_of=args.include_as_of,
     )
-    paths = write_reports(result, ROOT / "reports")
+    history_path = ROOT / "data" / "processed" / "rankings_history.jsonl"
+    paths = write_reports(result, ROOT / "reports", history_path=history_path)
     print("[完成] 全市場篩選", flush=True)
     for name, path in paths.items():
         print(f"[輸出] {name}: {path}", flush=True)
     momentum_config = load_momentum_config(args.momentum_config)
     momentum_result = build_momentum_result(result, momentum_config)
-    momentum_paths = write_momentum_reports(momentum_result, ROOT / "reports" / "momentum")
+    momentum_paths = write_momentum_reports(
+        momentum_result,
+        ROOT / "reports" / "momentum",
+        history_path=history_path,
+    )
     print("[完成] 營運動能篩選", flush=True)
     for name, path in momentum_paths.items():
         print(f"[輸出] momentum_{name}: {path}", flush=True)
