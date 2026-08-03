@@ -10,6 +10,24 @@ const outputPath = process.argv[3] ?? "outputs/latest/台股營運動能.xlsx";
 const root = process.cwd();
 const payload = JSON.parse(await fs.readFile(inputPath, "utf8"));
 const { metadata: meta, config, checks, results } = payload;
+const MILLION = 1_000_000;
+
+function scaled(value, divisor) {
+  return value == null ? null : Number(value) / divisor;
+}
+
+async function moveInspectSidecar(xlsxPath, qaDirectory) {
+  const sidecarPath = `${xlsxPath}.inspect.ndjson`;
+  const destination = path.join(qaDirectory, `${path.basename(xlsxPath)}.inspect.ndjson`);
+  try {
+    await fs.rename(sidecarPath, destination);
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    if (error?.code !== "EXDEV") throw error;
+    await fs.copyFile(sidecarPath, destination);
+    await fs.unlink(sidecarPath);
+  }
+}
 
 const workbook = Workbook.create();
 const dashboard = workbook.worksheets.add("儀表板");
@@ -80,7 +98,7 @@ explanation.getRange("A3:H3").merge();
 explanation.getRange("A3").values = [["核心概念"]];
 explanation.getRange("A3:H3").format = { fill: colors.green, font: { bold: true, color: colors.white, size: 12 } };
 explanation.getRange("A4:H8").merge();
-explanation.getRange("A4").values = [["這套模型以「高品質營運動能」為核心，尋找營收、獲利與營益率正在改善，而且成長能獲得現金流與財務體質支持的公司。\n\n模型關注的是企業營運是否加速，而不是短期股價上漲。營收成長若未反映至獲利、營益率或現金流，會降低評價；單月暴增、低基期轉盈及一次性收益也會另外標示。量化排名只用來縮小研究範圍，不代表預期報酬或買進建議。"]];
+explanation.getRange("A4").values = [["這套模型以「高品質營運動能」為核心，尋找營收、獲利與營益率正在改善，而且成長能獲得現金流與財務體質支持的公司。\n\n模型關注的是企業營運是否加速，而不是短期股價上漲。營收成長若未反映至獲利、營益率或現金流，會降低評價；單月暴增、低基期轉盈及一次性收益也會另外標示。量化排名只用來縮小研究範圍，不代表預期報酬或買進建議。Excel 顯示單位：成交額為百萬元。"]];
 explanation.getRange("A4:H8").format = { fill: colors.lightBlue, font: { color: colors.black, size: 11 }, wrapText: true, verticalAlignment: "center" };
 explanation.getRange("A10:H10").merge();
 explanation.getRange("A10").values = [["篩選流程"]];
@@ -175,7 +193,7 @@ ranking.getRange("A2:AG2").merge();
 ranking.getRange("A2").values = [[`市場資料 ${meta.latest_market_date}｜營收期 ${meta.latest_revenue_period}｜財報季 ${meta.latest_financial_quarter}｜排名依本次掃描固定`]];
 ranking.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
 const headers = [
-  "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "20日均成交額", "PER", "PBR",
+  "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "20日均成交額(百萬元)", "PER", "PBR",
   "近3月營收YoY", "單月營收YoY", "營收加速度", "TTM淨利成長", "TTM營益率", "營益率年變化", "獲利年數", "正FCF年數",
   "現金轉換", "負債/資產", "淨現金/市值", "同業PER分位", "同業PBR分位", "同業營益率分位", "營運動能分", "動能品質分",
   "估值流動性分", "總分", "硬門檻", "缺漏旗標", "模型短評（自動）",
@@ -185,7 +203,7 @@ formatHeader(ranking.getRange("A5:AG5"));
 ranking.getRange("A5:AG5").format.rowHeight = 44;
 const rankingRows = results.map((row) => [
   row.rank, row.stock_id, row.stock_name, row.industry, row.market, row.funnel_stage, row.governance_status,
-  row.exclusion_reasons, row.close, row.avg_daily_turnover, row.per, row.pbr, row.revenue_3m_yoy, row.latest_revenue_yoy,
+  row.exclusion_reasons, row.close, scaled(row.avg_daily_turnover, MILLION), row.per, row.pbr, row.revenue_3m_yoy, row.latest_revenue_yoy,
   row.revenue_acceleration, row.ttm_net_income_growth, row.ttm_operating_margin, row.ttm_operating_margin_change,
   row.profitable_years, row.positive_fcf_years, row.cash_conversion, row.liabilities_ratio, row.net_cash_ratio,
   row.sector_per_percentile, row.sector_pbr_percentile, row.sector_margin_percentile, null, null, null, null,
@@ -203,11 +221,11 @@ if (rankingRows.length) {
     `=${linearFormula(`S${r}`, 24)}+${linearFormula(`T${r}`, 25)}+${linearFormula(`U${r}`, 26)}+${descendingFormula(`V${r}`, 27)}+${linearFormula(`W${r}`, 28)}`,
   ]);
   ranking.getRange(`AC${firstDataRow}:AC${lastDataRow}`).formulas = formulaRows.map((r) => [
-    `=${descendingFormula(`X${r}`, 29)}+${descendingFormula(`Y${r}`, 30)}+${descendingFormula(`K${r}`, 31)}+${linearFormula(`J${r}`, 32)}`,
+    `=${descendingFormula(`X${r}`, 29)}+${descendingFormula(`Y${r}`, 30)}+${descendingFormula(`K${r}`, 31)}+${linearFormula(`J${r}*1000000`, 32)}`,
   ]);
   ranking.getRange(`AD${firstDataRow}:AD${lastDataRow}`).formulas = formulaRows.map((r) => [`=AA${r}+AB${r}+AC${r}`]);
   ranking.getRange(`I${firstDataRow}:L${lastDataRow}`).format.numberFormat = "#,##0.0";
-  ranking.getRange(`J${firstDataRow}:J${lastDataRow}`).format.numberFormat = "#,##0";
+  ranking.getRange(`J${firstDataRow}:J${lastDataRow}`).format.numberFormat = '#,##0"百萬"';
   ranking.getRange(`M${firstDataRow}:R${lastDataRow}`).format.numberFormat = "0.0%";
   ranking.getRange(`U${firstDataRow}:U${lastDataRow}`).format.numberFormat = "0.00x";
   ranking.getRange(`V${firstDataRow}:Z${lastDataRow}`).format.numberFormat = "0.0%";
@@ -420,4 +438,5 @@ for (const [sheetName, range, fileName] of renderSpecs) {
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 const output = await SpreadsheetFile.exportXlsx(workbook);
 await output.save(outputPath);
+await moveInspectSidecar(outputPath, qaDir);
 console.log(`[完成] 營運動能Excel: ${outputPath}`);

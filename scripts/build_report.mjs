@@ -10,6 +10,25 @@ const outputPath = process.argv[3] ?? "outputs/latest/台股價值篩選.xlsx";
 const root = process.cwd();
 const payload = JSON.parse(await fs.readFile(inputPath, "utf8"));
 const { metadata: meta, config, checks, results } = payload;
+const MILLION = 1_000_000;
+const HUNDRED_MILLION = 100_000_000;
+
+function scaled(value, divisor) {
+  return value == null ? null : Number(value) / divisor;
+}
+
+async function moveInspectSidecar(xlsxPath, qaDirectory) {
+  const sidecarPath = `${xlsxPath}.inspect.ndjson`;
+  const destination = path.join(qaDirectory, `${path.basename(xlsxPath)}.inspect.ndjson`);
+  try {
+    await fs.rename(sidecarPath, destination);
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    if (error?.code !== "EXDEV") throw error;
+    await fs.copyFile(sidecarPath, destination);
+    await fs.unlink(sidecarPath);
+  }
+}
 
 const workbook = Workbook.create();
 const dashboard = workbook.worksheets.add("儀表板");
@@ -80,7 +99,7 @@ explanation.getRange("A3:H3").merge();
 explanation.getRange("A3").values = [["核心概念"]];
 explanation.getRange("A3:H3").format = { fill: colors.teal, font: { bold: true, color: colors.white, size: 12 } };
 explanation.getRange("A4:H8").merge();
-explanation.getRange("A4").values = [["這套模型不是直接挑選最便宜的股票，而是先排除明顯風險，再比較財務體質、估值與營運動能。模型先以獲利、現金流、負債與成交量建立安全底線，再從防禦能力、估值合理性及營運動能三方面評分。\n\n量化排名只用來縮小研究範圍，不代表預期報酬或買進建議；公司治理、競爭優勢與新動能仍須透過年報、法說及公開資訊查證。"]];
+explanation.getRange("A4").values = [["這套模型不是直接挑選最便宜的股票，而是先排除明顯風險，再比較財務體質、估值與營運動能。模型先以獲利、現金流、負債與成交量建立安全底線，再從防禦能力、估值合理性及營運動能三方面評分。\n\n量化排名只用來縮小研究範圍，不代表預期報酬或買進建議；公司治理、競爭優勢與新動能仍須透過年報、法說及公開資訊查證。Excel 顯示單位：市值為億元，成交額及資產負債金額為百萬元。"]];
 explanation.getRange("A4:H8").format = { fill: colors.lightBlue, font: { color: colors.black, size: 11 }, wrapText: true, verticalAlignment: "center" };
 explanation.getRange("A10:H10").merge();
 explanation.getRange("A10").values = [["篩選流程"]];
@@ -207,9 +226,9 @@ ranking.getRange("A3").values = [["排名順序依本次掃描結果固定；調
 ranking.getRange("A3").format = { font: { italic: true, color: colors.gray } };
 
 const headers = [
-  "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "市值",
-  "20日均成交額", "PER", "PBR", "現金", "有息負債", "流動資產", "流動負債", "總負債", "總資產", "應收款",
-  "存貨", "流動金融資產", "不動產廠房設備", "淨現金/市值", "流動比率", "負債/資產", "負債/現金", "保守清算價值", "清算覆蓋", "獲利年數",
+  "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "市值(億元)",
+  "20日均成交額(百萬元)", "PER", "PBR", "現金(百萬元)", "有息負債(百萬元)", "流動資產(百萬元)", "流動負債(百萬元)", "總負債(百萬元)", "總資產(百萬元)", "應收款(百萬元)",
+  "存貨(百萬元)", "流動金融資產(百萬元)", "不動產廠房設備(百萬元)", "淨現金/市值", "流動比率", "負債/資產", "負債/現金", "保守清算價值(百萬元)", "清算覆蓋", "獲利年數",
   "完整獲利年數", "正FCF年數", "近3月營收YoY", "單月營收YoY", "TTM營益率", "TTM淨利成長", "同業PER分位", "同業PBR分位", "同業營益率分位", "防禦分",
   "估值分", "動能分", "總分", "硬門檻", "缺漏旗標",
 ];
@@ -219,9 +238,9 @@ ranking.getRange("A5:AS5").format.rowHeight = 44;
 
 const rankingRows = results.map((row) => [
   row.rank, row.stock_id, row.stock_name, row.industry, row.market, row.funnel_stage, row.governance_status,
-  row.exclusion_reasons, row.close, row.market_value, row.avg_daily_turnover, row.per, row.pbr, row.cash, row.debt,
-  row.current_assets, row.current_liabilities, row.liabilities, row.total_assets, row.receivables, row.inventory,
-  row.current_financial_assets, row.property_plant_equipment, null, null, null, null, null, null, row.profitable_years,
+  row.exclusion_reasons, row.close, scaled(row.market_value, HUNDRED_MILLION), scaled(row.avg_daily_turnover, MILLION), row.per, row.pbr, scaled(row.cash, MILLION), scaled(row.debt, MILLION),
+  scaled(row.current_assets, MILLION), scaled(row.current_liabilities, MILLION), scaled(row.liabilities, MILLION), scaled(row.total_assets, MILLION), scaled(row.receivables, MILLION), scaled(row.inventory, MILLION),
+  scaled(row.current_financial_assets, MILLION), scaled(row.property_plant_equipment, MILLION), null, null, null, null, null, null, row.profitable_years,
   row.complete_profit_years, row.positive_fcf_years, row.revenue_3m_yoy, row.latest_revenue_yoy, row.ttm_operating_margin,
   row.ttm_net_income_growth, row.sector_per_percentile, row.sector_pbr_percentile, row.sector_margin_percentile,
   null, null, null, null, row.hard_pass, row.missing_flags,
@@ -231,14 +250,14 @@ const lastDataRow = firstDataRow + rankingRows.length - 1;
 if (rankingRows.length) {
   ranking.getRange(`A${firstDataRow}:AS${lastDataRow}`).values = rankingRows;
   const formulaRows = results.map((_, index) => firstDataRow + index);
-  ranking.getRange(`X${firstDataRow}:X${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR((N${r}-O${r})/J${r},0)`]);
+  ranking.getRange(`X${firstDataRow}:X${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR((N${r}-O${r})/(J${r}*100),0)`]);
   ranking.getRange(`Y${firstDataRow}:Y${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(P${r}/Q${r},0)`]);
   ranking.getRange(`Z${firstDataRow}:Z${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(R${r}/S${r},0)`]);
   ranking.getRange(`AA${firstDataRow}:AA${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(O${r}/N${r},999)`]);
   ranking.getRange(`AB${firstDataRow}:AB${lastDataRow}`).formulas = formulaRows.map((r) => [
     `=N${r}*'參數'!$C$5+V${r}*'參數'!$C$6+T${r}*'參數'!$C$7+U${r}*'參數'!$C$8+W${r}*'參數'!$C$9-R${r}`,
   ]);
-  ranking.getRange(`AC${firstDataRow}:AC${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(AB${r}/J${r},0)`]);
+  ranking.getRange(`AC${firstDataRow}:AC${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(AB${r}/(J${r}*100),0)`]);
   ranking.getRange(`AN${firstDataRow}:AN${lastDataRow}`).formulas = formulaRows.map((r) => [
     `=${linearFormula(`X${r}`, "'參數'!$C$25", "'參數'!$C$26", 15)}+${linearFormula(`Y${r}`, "'參數'!$C$27", "'參數'!$C$28", 10)}+${descendingFormula(`Z${r}`, "'參數'!$C$29", "'參數'!$C$30", 10)}+10*MAX(0,MIN(1,AD${r}/'參數'!$C$14))+5*MAX(0,MIN(1,AF${r}/'參數'!$C$22))`,
   ]);
@@ -253,7 +272,9 @@ if (rankingRows.length) {
   ranking.getRange(`B${firstDataRow}:H${lastDataRow}`).format.horizontalAlignment = "left";
   ranking.getRange(`I${firstDataRow}:AQ${lastDataRow}`).format.horizontalAlignment = "right";
   ranking.getRange(`I${firstDataRow}:I${lastDataRow}`).format.numberFormat = "#,##0.00;[Red](#,##0.00);-";
-  ranking.getRange(`J${firstDataRow}:W${lastDataRow}`).format.numberFormat = "#,##0;[Red](#,##0);-";
+  ranking.getRange(`J${firstDataRow}:J${lastDataRow}`).format.numberFormat = '#,##0.0"億";[Red](#,##0.0"億");-';
+  ranking.getRange(`K${firstDataRow}:K${lastDataRow}`).format.numberFormat = '#,##0"百萬";[Red](#,##0"百萬");-';
+  ranking.getRange(`N${firstDataRow}:W${lastDataRow}`).format.numberFormat = "#,##0;[Red](#,##0);-";
   ranking.getRange(`L${firstDataRow}:M${lastDataRow}`).format.numberFormat = "0.0x;[Red](0.0x);-";
   ranking.getRange(`X${firstDataRow}:X${lastDataRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
   ranking.getRange(`Y${firstDataRow}:Y${lastDataRow}`).format.numberFormat = "0.00x;[Red](0.00x);-";
@@ -542,4 +563,5 @@ for (const [sheetName, range, fileName] of renderSpecs) {
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 const output = await SpreadsheetFile.exportXlsx(workbook);
 await output.save(outputPath);
+await moveInspectSidecar(outputPath, qaDir);
 console.log(`[完成] Excel: ${outputPath}`);
