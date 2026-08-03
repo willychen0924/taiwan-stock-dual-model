@@ -5,7 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from .model import clamp, descending_score, linear_score
-from .quality import aggregate_check_status
+from .quality import (
+    aggregate_check_status,
+    revenue_signal_coverage_metadata,
+    revenue_signal_coverage_metrics,
+)
 
 
 SUMMARY_MIN_CHARS = 50
@@ -333,7 +337,12 @@ def build_momentum_result(base_result: dict[str, Any], config: dict[str, Any]) -
     def coverage(key: str) -> float:
         return sum(row.get(key) is not None for row in active_rows) / max(1, len(active_rows))
 
-    acceleration_coverage = coverage("revenue_acceleration")
+    acceleration_metrics = revenue_signal_coverage_metrics(
+        rows,
+        signal_key="revenue_acceleration",
+        financial_industries=financial_industries,
+    )
+    acceleration_coverage = acceleration_metrics["universe_revenue_coverage"]
     margin_change_coverage = coverage("ttm_operating_margin_change")
     cash_conversion_coverage = coverage("cash_conversion")
     quality_thresholds = config["quality_checks"]
@@ -424,6 +433,15 @@ def build_momentum_result(base_result: dict[str, Any], config: dict[str, Any]) -
             "model_status": model_status,
             "data_status": data_status,
             "revenue_acceleration_coverage": acceleration_coverage,
+            "ranked_revenue_coverage": acceleration_metrics["ranked_revenue_coverage"],
+            "universe_revenue_coverage": acceleration_metrics["universe_revenue_coverage"],
+            "revenue_coverage_threshold": acceleration_threshold,
+            "revenue_signal_coverage": revenue_signal_coverage_metadata(
+                acceleration_metrics,
+                signal_key="revenue_acceleration",
+                signal_label="營收加速度",
+                threshold=acceleration_threshold,
+            ),
             "margin_change_coverage": margin_change_coverage,
             "cash_conversion_coverage": cash_conversion_coverage,
         }

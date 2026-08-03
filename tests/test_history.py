@@ -19,7 +19,14 @@ HISTORY_KWARGS = {
 }
 
 
-def payload(*, as_of: str, status: str = "OK", complete_revenue: bool = True, ranked: bool = True) -> dict:
+def payload(
+    *,
+    as_of: str,
+    status: str = "OK",
+    complete_revenue: bool = True,
+    ranked: bool = True,
+    model_id: str = "test_model",
+) -> dict:
     row = {
         "stock_id": "1234",
         "stock_name": "測試公司",
@@ -30,6 +37,7 @@ def payload(*, as_of: str, status: str = "OK", complete_revenue: bool = True, ra
         "total_score": 70,
         "funnel_stage": "精華20" if ranked else "基礎觀察",
         "revenue_3m_yoy": 0.1 if complete_revenue else None,
+        "revenue_acceleration": 0.05 if complete_revenue else None,
     }
     return {
         "metadata": {
@@ -39,7 +47,7 @@ def payload(*, as_of: str, status: str = "OK", complete_revenue: bool = True, ra
             "latest_financial_quarter": "2026-03-31",
             "model_status": status,
             "hard_pass_count": 1 if ranked else 0,
-            "model_id": "test_model",
+            "model_id": model_id,
             "model_name": "測試模型",
         },
         "config": {"version": "test"},
@@ -104,6 +112,17 @@ class RankingHistoryTests(unittest.TestCase):
             report["metadata"]["generated_at"] = "2026-08-03T09:00:00+08:00"
             self.write_report(root, "report.json", report)
             self.assertEqual(len(append_history_records(history, [path], root=root, **HISTORY_KWARGS)), 0)
+
+    def test_momentum_history_uses_acceleration_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            report = payload(as_of="2026-08-03", model_id="operating_momentum")
+            report["results"][0]["revenue_3m_yoy"] = None
+            path = self.write_report(root, "report.json", report)
+            record = build_history_record(json.loads(path.read_text()), path, root=root, **HISTORY_KWARGS)
+            self.assertEqual(record["revenue_signal_coverage"]["signal_key"], "revenue_acceleration")
+            self.assertEqual(record["ranked_revenue_coverage"], 1)
+            self.assertTrue(record["eligible_for_backtest"])
 
 
 if __name__ == "__main__":

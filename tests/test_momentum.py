@@ -41,6 +41,8 @@ class MomentumModelTests(unittest.TestCase):
         self.assertNotIn("momentum_score", output)
         self.assertNotIn("valuation_score", output)
         self.assertNotIn("defense_score", output)
+        self.assertEqual(result["metadata"]["revenue_signal_coverage"]["signal_key"], "revenue_acceleration")
+        self.assertEqual(result["metadata"]["ranked_revenue_coverage"], 1)
 
     def test_missing_prior_income_is_data_history_not_turnaround(self) -> None:
         self.assertEqual(momentum_bucket(10, None), "前期資料不足")

@@ -8,7 +8,7 @@ from datetime import date
 from typing import Any, Iterable
 
 from .dates import previous_quarter
-from .quality import aggregate_check_status, revenue_coverage_checks
+from .quality import aggregate_check_status, revenue_coverage_checks, revenue_signal_coverage_metadata
 
 
 def as_number(value: Any) -> float | None:
@@ -655,6 +655,8 @@ def analyze(
         results,
         threshold=revenue_threshold,
         financial_industries=financial_industries,
+        signal_key="revenue_3m_yoy",
+        signal_label="3M月營收年增率",
     )
     checks = [
         {
@@ -742,6 +744,12 @@ def analyze(
         "ranked_revenue_coverage": revenue_metrics["ranked_revenue_coverage"],
         "universe_revenue_coverage": revenue_metrics["universe_revenue_coverage"],
         "revenue_coverage_threshold": revenue_threshold,
+        "revenue_signal_coverage": revenue_signal_coverage_metadata(
+            revenue_metrics,
+            signal_key="revenue_3m_yoy",
+            signal_label="3M月營收年增率",
+            threshold=revenue_threshold,
+        ),
         "unknown_debt_types": sorted(unknown_debt_types),
         "source_row_counts": {key: len(value) for key, value in datasets.items()},
     }

@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from .quality import revenue_coverage_metrics
+from .quality import revenue_signal_coverage_metadata, revenue_signal_coverage_metrics
 
-HISTORY_SCHEMA_VERSION = 2
+HISTORY_SCHEMA_VERSION = 3
 VOLATILE_METADATA_KEYS = {"created_at", "generated_at", "report_generated_at", "timestamp"}
 
 
@@ -41,7 +41,23 @@ def build_history_record(
     report_id = f"{model_id}:{as_of}:{snapshot_sha256[:16]}"
 
     ranked_rows = [row for row in results if row.get("hard_pass")]
-    revenue_metrics = revenue_coverage_metrics(results, financial_industries=financial_industries)
+    if model_id == "operating_momentum":
+        signal_key = "revenue_acceleration"
+        signal_label = "營收加速度"
+        signal_threshold = float(
+            payload.get("config", {})
+            .get("quality_checks", {})
+            .get("min_revenue_acceleration_coverage", min_revenue_coverage)
+        )
+    else:
+        signal_key = "revenue_3m_yoy"
+        signal_label = "3M月營收年增率"
+        signal_threshold = min_revenue_coverage
+    revenue_metrics = revenue_signal_coverage_metrics(
+        results,
+        signal_key=signal_key,
+        financial_industries=financial_industries,
+    )
     ranked_revenue_coverage = revenue_metrics["ranked_revenue_coverage"]
     universe_revenue_coverage = revenue_metrics["universe_revenue_coverage"]
 
@@ -49,11 +65,11 @@ def build_history_record(
     source_model_status = str(metadata.get("model_status") or "UNKNOWN")
     if source_model_status != "OK":
         ineligible_reasons.append(f"來源模型狀態為 {source_model_status}")
-    threshold_label = f"{min_revenue_coverage:.0%}"
-    if ranked_revenue_coverage < min_revenue_coverage:
-        ineligible_reasons.append(f"排名母體營收覆蓋率低於{threshold_label}")
-    if universe_revenue_coverage < min_revenue_coverage:
-        ineligible_reasons.append(f"一般公司營收覆蓋率低於{threshold_label}")
+    threshold_label = f"{signal_threshold:.0%}"
+    if ranked_revenue_coverage < signal_threshold:
+        ineligible_reasons.append(f"排名母體{signal_label}覆蓋率低於{threshold_label}")
+    if universe_revenue_coverage < signal_threshold:
+        ineligible_reasons.append(f"一般公司{signal_label}覆蓋率低於{threshold_label}")
     effective_model_status = (
         "FAIL"
         if source_model_status == "FAIL"
@@ -98,7 +114,13 @@ def build_history_record(
         "hard_pass_count": int(metadata.get("hard_pass_count") or 0),
         "ranked_revenue_coverage": ranked_revenue_coverage,
         "universe_revenue_coverage": universe_revenue_coverage,
-        "revenue_coverage_threshold": min_revenue_coverage,
+        "revenue_coverage_threshold": signal_threshold,
+        "revenue_signal_coverage": revenue_signal_coverage_metadata(
+            revenue_metrics,
+            signal_key=signal_key,
+            signal_label=signal_label,
+            threshold=signal_threshold,
+        ),
         "eligible_for_backtest": not ineligible_reasons,
         "ineligible_reasons": ineligible_reasons,
         "rankings": rankings,

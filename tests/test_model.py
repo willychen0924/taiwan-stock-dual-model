@@ -17,7 +17,7 @@ from value_screener.model import (  # noqa: E402
     parse_cashflow,
     revenue_window_yoy,
 )
-from value_screener.quality import revenue_coverage_checks  # noqa: E402
+from value_screener.quality import revenue_coverage_checks, revenue_signal_coverage_metrics  # noqa: E402
 from value_screener.dates import latest_complete_quarter  # noqa: E402
 from value_screener.pipeline import _require_latest_snapshots, _select_recent_trading_dates  # noqa: E402
 from datetime import date
@@ -48,6 +48,17 @@ class ScoreTests(unittest.TestCase):
         self.assertEqual(metrics["ranked_revenue_coverage"], 0.5)
         self.assertEqual(metrics["universe_revenue_coverage"], 2 / 3)
         self.assertEqual([item["status"] for item in checks], ["WARN", "WARN"])
+
+        acceleration = revenue_signal_coverage_metrics(
+            [
+                {"hard_pass": True, "close": 10, "industry": "半導體業", "revenue_acceleration": 0.1},
+                {"hard_pass": False, "close": 10, "industry": "半導體業", "revenue_acceleration": None},
+            ],
+            signal_key="revenue_acceleration",
+            financial_industries={"金融業"},
+        )
+        self.assertEqual(acceleration["ranked_revenue_coverage"], 1)
+        self.assertEqual(acceleration["universe_revenue_coverage"], 0.5)
 
 
 class FinancialParsingTests(unittest.TestCase):
