@@ -1,0 +1,65 @@
+{
+  "model": {
+    "id": "operating_momentum",
+    "name": "台股高品質營運動能篩選"
+  },
+  "weights": {
+    "operating_momentum": 60,
+    "quality": 25,
+    "valuation_liquidity": 15
+  },
+  "components": {
+    "operating_momentum": {
+      "revenue_3m_yoy": 15,
+      "latest_revenue_yoy": 10,
+      "revenue_acceleration": 10,
+      "ttm_net_income_growth": 10,
+      "sector_margin_percentile": 5,
+      "operating_margin_change": 10
+    },
+    "quality": {
+      "profitable_years": 5,
+      "positive_fcf_years": 7,
+      "cash_conversion": 5,
+      "liabilities_ratio": 5,
+      "net_cash_ratio": 3
+    },
+    "valuation_liquidity": {
+      "sector_per_percentile": 6,
+      "sector_pbr_percentile": 4,
+      "absolute_per": 2,
+      "turnover": 3
+    }
+  },
+  "hard_gates": {
+    "min_complete_profit_years": 3,
+    "max_liabilities_to_assets": 0.75,
+    "min_avg_daily_turnover_twd": 50000000,
+    "require_positive_ttm_income": true,
+    "require_positive_prior_ttm_income": true,
+    "require_revenue_acceleration_data": true
+  },
+  "score_targets": {
+    "revenue_growth_floor": 0.0,
+    "revenue_growth_target": 0.3,
+    "revenue_acceleration_floor": -0.05,
+    "revenue_acceleration_target": 0.15,
+    "net_income_growth_floor": 0.0,
+    "net_income_growth_target": 0.5,
+    "margin_change_floor": -0.02,
+    "margin_change_target": 0.05,
+    "cash_conversion_floor": 0.0,
+    "cash_conversion_target": 1.0,
+    "liabilities_ratio_best": 0.3,
+    "liabilities_ratio_worst": 0.75,
+    "net_cash_ratio_floor": -0.2,
+    "net_cash_ratio_target": 0.3,
+    "per_best": 10.0,
+    "per_worst": 50.0,
+    "turnover_target_twd": 100000000
+  },
+  "report": {
+    "watchlist_size": 100,
+    "focus_size": 20
+  }
+}

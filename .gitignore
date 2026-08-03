@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.DS_Store
+node_modules/
+node_modules
+data/raw/
+data/cache/
+reports/
+outputs/
+qa/

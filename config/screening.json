@@ -1,0 +1,53 @@
+{
+  "version": "0.1.0",
+  "universe": {
+    "markets": ["twse", "tpex"],
+    "stock_id_pattern": "^[0-9]{4}$",
+    "excluded_industries": ["ETF", "存託憑證"],
+    "financial_industries": ["金融保險", "金融業"],
+    "generic_industries": ["電子工業"]
+  },
+  "hard_gates": {
+    "required_history_years": 10,
+    "min_profitable_years": 5,
+    "min_complete_profit_years": 5,
+    "min_positive_fcf_years": 3,
+    "min_current_ratio": 1.2,
+    "max_liabilities_to_assets": 0.6,
+    "max_debt_to_cash": 1.0,
+    "min_avg_daily_turnover_twd": 50000000,
+    "require_positive_ttm_income": true
+  },
+  "liquidation_haircuts": {
+    "cash": 1.0,
+    "current_financial_assets": 0.9,
+    "receivables": 0.75,
+    "inventory": 0.5,
+    "property_plant_equipment": 0.25,
+    "goodwill": 0.0
+  },
+  "score_targets": {
+    "net_cash_ratio_floor": -0.15,
+    "net_cash_ratio_target": 0.5,
+    "current_ratio_floor": 1.0,
+    "current_ratio_target": 2.0,
+    "liabilities_ratio_target": 0.2,
+    "liabilities_ratio_worst": 0.6,
+    "liquidation_coverage_floor": 0.0,
+    "liquidation_coverage_target": 1.0,
+    "per_best": 10.0,
+    "per_worst": 40.0,
+    "growth_floor": -0.1,
+    "growth_target": 0.3
+  },
+  "weights": {
+    "defense": 50,
+    "valuation": 30,
+    "momentum": 20
+  },
+  "report": {
+    "watchlist_size": 100,
+    "focus_size": 20,
+    "thread_output_id": "019f63df-5f76-70d3-afae-f5a610efbcf2"
+  }
+}

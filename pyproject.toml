@@ -1,0 +1,15 @@
+[project]
+name = "taiwan-value-screener"
+version = "0.1.0"
+description = "FinMind-backed defensive value stock screener for Taiwan equities"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb>=1.5,<2",
+  "lxml>=5,<7",
+  "numpy>=2,<3",
+  "pandas>=2.2,<3",
+  "pyarrow>=20,<26",
+]
+
+[tool.unittest]
+start-directory = "tests"
