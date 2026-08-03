@@ -53,11 +53,38 @@ class CombinedReportTests(unittest.TestCase):
         self.assertIn("雙模型交集", page)
         self.assertIn("共 1 檔", page)
         self.assertIn("2330", page)
-        self.assertIn("sortable-table", page)
-        self.assertIn('role="tablist"', page)
         self.assertIn('id="status-value"', page)
         self.assertIn('id="status-momentum"', page)
         self.assertIn("量化排序不是買進建議", page)
+
+    def test_tabs_and_row_expansion_work_without_javascript(self) -> None:
+        """分頁與逐列展開必須是原生行為：禁用 script 的環境仍要能用。"""
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        self.assertNotIn("<script", page)
+        for key in ("t-momentum", "t-value", "t-inter"):
+            self.assertIn(f'id="{key}" class="tabin"', page)
+        # 預設停在營運動能
+        self.assertIn('id="t-momentum" class="tabin" checked', page)
+        for key in ("p-momentum", "p-value", "p-inter"):
+            self.assertIn(f'#t-{key.split("-")[1]}:checked', page)
+        self.assertIn('<details class="lrow"', page)
+
+    def test_radio_inputs_precede_every_element_they_control(self) -> None:
+        """純 CSS 分頁靠 ~ 兄弟選擇器；radio 若被包進卡片，面板會全部隱藏。"""
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        last_radio = page.rindex('class="tabin"')
+        for anchor in ('<header class="head">', 'id="p-momentum"', 'id="p-value"',
+                       'id="p-inter"', 'class="audit"'):
+            self.assertLess(last_radio, page.index(anchor), anchor)
+        self.assertLess(page.index('<header class="head">'), page.index("</header>"))
+        self.assertLess(page.index("</header>"), page.index('id="p-momentum"'))
+
+    def test_intersection_omits_score_bars(self) -> None:
+        """兩個模型的三段色代表不同區塊，並排會被誤讀成可比。"""
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        panel = page[page.index('id="p-inter"'):page.index('class="audit"')]
+        self.assertNotIn('class="bar"', panel)
+        self.assertIn("總分尺度不同，不可直接互相比較", panel)
 
     def test_invalid_model_suppresses_intersection(self) -> None:
         page = build_combined_html(
