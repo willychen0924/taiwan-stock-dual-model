@@ -69,6 +69,8 @@ class ModelSummaryTests(unittest.TestCase):
                     "valuation_score": 20.0,
                     "momentum_score": 10.0,
                     "per": 12.0,
+                    "pbr": 1.2,
+                    "avg_daily_turnover": 80_000_000,
                     "net_cash_ratio": 0.2,
                     "liquidation_coverage": 0.3,
                     "revenue_3m_yoy": 0.1,
@@ -108,6 +110,11 @@ class ModelSummaryTests(unittest.TestCase):
         self.assertIn("展開自選100第 21–100 名（1 檔）", page)
         self.assertIn("data-sort", page)
         self.assertIn("中性", page)
+        self.assertIn("台股防禦型價值監控台", page)
+        self.assertIn("本益比", page)
+        self.assertIn("本淨比", page)
+        self.assertIn("技術面、籌碼面與模型短評", page)
+        self.assertNotIn("<th data-type=\"text\">治理</th>", page)
         self.assertNotIn("cdn", page.lower())
 
 

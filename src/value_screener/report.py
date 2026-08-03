@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from .report_common import (
-    build_checks_panel,
-    build_freshness_banner,
+    build_monitor_status,
     format_rank_change,
     load_rank_comparison,
+    monitor_report_css,
     rank_comparison_note,
     score_composition_bar,
     sortable_cell,
@@ -270,35 +270,53 @@ def _value_row_html(
             ("動能", row.get("momentum_score"), "score-momentum"),
         ]
     )
-    return "<tr>" + "".join(
+    row_id = f"value-{stock_id}"
+    main = f'<tr data-row-id="{html.escape(row_id, quote=True)}">' + "".join(
         [
             sortable_cell(str(row["rank"]), row["rank"]),
             sortable_cell(html.escape(change), change, css_class="rank-change"),
             sortable_cell(f"<strong>{html.escape(stock_id)}</strong>", stock_id),
             sortable_cell(html.escape(str(row.get("stock_name") or "")), row.get("stock_name")),
             sortable_cell(html.escape(str(row.get("industry") or "")), row.get("industry")),
-            sortable_cell(_format_number(row.get("total_score")), row.get("total_score")),
             sortable_cell(composition, row.get("total_score"), css_class="composition"),
-            sortable_cell(_format_number(row.get("per")), row.get("per")),
+            sortable_cell(_format_number(row.get("total_score")), row.get("total_score"), css_class="total"),
             sortable_cell(_format_percent(row.get("net_cash_ratio")), row.get("net_cash_ratio")),
             sortable_cell(_format_percent(row.get("liquidation_coverage")), row.get("liquidation_coverage")),
+            sortable_cell(_format_number(row.get("per"), 2), row.get("per")),
+            sortable_cell(_format_number(row.get("pbr"), 2), row.get("pbr")),
             sortable_cell(_format_percent(row.get("revenue_3m_yoy")), row.get("revenue_3m_yoy")),
-            sortable_cell(html.escape(extra.get("technical", "—")), extra.get("technical", "—"), css_class="enrichment"),
-            sortable_cell(html.escape(extra.get("chip", "—")), extra.get("chip", "—"), css_class="enrichment"),
-            sortable_cell(html.escape(str(row.get("model_summary") or "")), row.get("model_summary"), css_class="summary"),
-            sortable_cell(html.escape(str(row.get("governance_status") or "")), row.get("governance_status")),
+            sortable_cell(
+                _format_number(float(row["avg_daily_turnover"]) / 1_000_000, 0)
+                if row.get("avg_daily_turnover") is not None else "—",
+                row.get("avg_daily_turnover"),
+            ),
         ]
     ) + "</tr>"
+    detail = (
+        f'<tr class="row-detail" data-detail-for="{html.escape(row_id, quote=True)}"><td colspan="13">'
+        '<details><summary>技術面、籌碼面與模型短評</summary><div class="research-grid">'
+        f'<div><b>技術面</b><br>{html.escape(extra.get("technical", "—"))}</div>'
+        f'<div><b>籌碼面</b><br>{html.escape(extra.get("chip", "—"))}</div>'
+        f'<div><b>模型短評</b><br>{html.escape(str(row.get("model_summary") or ""))}</div>'
+        '</div></details></td></tr>'
+    )
+    return main + detail
 
 
 def _value_table(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict[str, dict[str, str]]) -> str:
     headers = [
         ("排名", "number"), ("較前次", "text"), ("代碼", "text"), ("公司", "text"), ("產業", "text"),
-        ("總分", "number"), ("分數組成", "number"), ("PER", "number"), ("淨現金/市值", "number"),
-        ("清算覆蓋", "number"), ("近3月營收YoY", "number"), ("技術面", "text"), ("籌碼面", "text"),
-        ("模型短評（自動）", "text"), ("治理", "text"),
+        ("分數組成", "number"), ("總分", "number"), ("淨現金/市值", "number"),
+        ("清算覆蓋", "number"), ("本益比", "number"), ("本淨比", "number"), ("3M營收", "number"),
+        ("日均額（百萬）", "number"),
     ]
-    head = "".join(f'<th data-type="{kind}">{html.escape(label)}</th>' for label, kind in headers)
+    score_columns = {5: "key-first", 7: "key-first", 8: "key-second", 9: "key-second", 10: "key-second", 11: "key-third"}
+    head = "".join(
+        f'<th data-type="{kind}">'
+        f'{f"""<span class="key-dot {score_columns[index]}"></span>""" if index in score_columns else ""}'
+        f'{html.escape(label)}</th>'
+        for index, (label, kind) in enumerate(headers)
+    )
     body = "".join(_value_row_html(row, comparison, enrichment) for row in rows)
     return f'<table class="sortable-table"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
 
@@ -319,8 +337,15 @@ def _build_html(
     watchlist_remainder = passing[focus_size:watchlist_size]
     focus_table = _value_table(focus, comparison, enrichment)
     remainder_table = _value_table(watchlist_remainder, comparison, enrichment)
-    freshness = build_freshness_banner(meta)
-    checks_panel = build_checks_panel(result.get("checks", []))
+    checks_panel = build_monitor_status(
+        meta,
+        result.get("checks", []),
+        stats=[
+            ("普通股母體", meta.get("universe_count")),
+            ("一般公司", meta.get("operating_company_count")),
+            ("硬門檻通過", meta.get("hard_pass_count")),
+        ],
+    )
     comparison_note = rank_comparison_note(comparison)
     sortable_script = sortable_table_script()
     return f"""<!doctype html>
@@ -329,37 +354,12 @@ def _build_html(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>台股防禦型價值篩選｜{html.escape(meta['as_of'])}</title>
-<style>
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;margin:0;background:#f4f7fb;color:#172033}}
-.wrap{{max-width:1280px;margin:0 auto;padding:32px}}
-.hero{{background:#12263f;color:white;border-radius:18px;padding:28px 32px}}
-.hero h1{{margin:0 0 8px;font-size:28px}} .hero p{{margin:0;color:#c8d6e5}}
-.freshness{{margin-top:14px;padding:10px 14px;border-radius:10px;font-size:14px;font-weight:650}} .freshness.good{{background:#dcfce7;color:#14532d}} .freshness.bad{{background:#fee2e2;color:#991b1b}}
-.cards{{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:18px 0}}
-.card{{background:white;border-radius:14px;padding:18px;box-shadow:0 2px 14px #15324f14}}
-.card b{{display:block;font-size:24px;color:#0f766e}} .card span{{font-size:13px;color:#64748b}}
-.panel{{background:white;border-radius:14px;padding:20px;margin-top:18px;overflow:auto;box-shadow:0 2px 14px #15324f14}}
-table{{width:100%;border-collapse:collapse;font-size:13px}} th{{background:#12263f;color:white;text-align:left;padding:10px;white-space:nowrap}}
-td{{padding:9px 10px;border-bottom:1px solid #e7edf4;white-space:nowrap}} td.summary,td.check-note{{min-width:24rem;white-space:normal;line-height:1.6}} td.rank-change{{font-weight:700}} tr:hover td{{background:#f0fdfa}}
-.sortable{{cursor:pointer;user-select:none}} .sortable::after{{content:" ↕";color:#9fb3c8;font-size:10px}} .sortable[data-order="asc"]::after{{content:" ↑"}} .sortable[data-order="desc"]::after{{content:" ↓"}}
-.scorebar{{display:flex;width:150px;height:11px;border-radius:999px;overflow:hidden;background:#e2e8f0}} .score-segment{{display:block;height:100%}} .score-defense{{background:#0f766e}} .score-valuation{{background:#2563eb}} .score-momentum{{background:#d97706}} .score-remainder{{background:#e2e8f0}}
-td.composition{{min-width:160px}} td.enrichment{{max-width:16rem;white-space:normal;line-height:1.45}} details{{margin-top:18px;border:1px solid #dbe4ee;border-radius:12px;padding:12px}} summary{{cursor:pointer;font-weight:750;color:#0f766e}}
-.status{{display:inline-block;padding:3px 9px;border-radius:999px;font-weight:750}} .status.ok{{background:#dcfce7;color:#166534}} .status.warn{{background:#fef3c7;color:#92400e}} .status.fail{{background:#fee2e2;color:#991b1b}}
-.note{{margin-top:18px;color:#526174;font-size:13px;line-height:1.7}}
-@media(max-width:900px){{.cards{{grid-template-columns:repeat(2,1fr)}}.wrap{{padding:16px}}}}
-</style>
+<style>{monitor_report_css()}</style>
 </head>
 <body><div class="wrap">
-<div class="hero"><h1>台股防禦型價值篩選</h1><p>資料日 {html.escape(meta['latest_market_date'])}｜完整財報季 {html.escape(meta['latest_financial_quarter'])}｜研究候選，不是買進建議</p>{freshness}</div>
-<div class="cards">
-<div class="card"><b>{meta['universe_count']:,}</b><span>普通股母體</span></div>
-<div class="card"><b>{meta['operating_company_count']:,}</b><span>一般公司模型</span></div>
-<div class="card"><b>{meta['hard_pass_count']:,}</b><span>硬門檻通過</span></div>
-<div class="card"><b>{meta['watchlist_count']:,}</b><span>自選 100</span></div>
-<div class="card"><b>{meta['focus_count']:,}</b><span>精華 20</span></div>
-</div>
-<div class="panel"><h2>精華候選</h2><p class="note">{comparison_note}</p>{focus_table}
-<details><summary>展開自選100第 21–100 名（{len(watchlist_remainder)} 檔）</summary>{remainder_table}</details></div>
+<div class="hero"><div><h1>台股防禦型價值監控台</h1><p>資料日 {html.escape(meta['latest_market_date'])}｜完整財報季 {html.escape(meta['latest_financial_quarter'])}｜研究候選，不是買進建議</p></div><div class="hero-status">模型 {html.escape(str(meta.get('model_status') or 'UNKNOWN'))}</div></div>
 {checks_panel}
+<div class="panel"><div class="panel-head"><div><h2>精華候選</h2><p class="note">{comparison_note}</p></div><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{focus_table}
+<details class="watchlist"><summary>展開自選100第 21–100 名（{len(watchlist_remainder)} 檔）</summary>{remainder_table}</details></div>
 <p class="note">量化分數只負責縮小研究範圍。治理誠信、競爭優勢、AI／機器人／矽光子等催化必須經法說、年報與公開資訊人工查證。技術面與籌碼面為外部呈現欄位，不影響模型排名。清算價值採折價估計，商譽預設為零，不保證股價下檔。</p>
 {sortable_script}</div></body></html>"""

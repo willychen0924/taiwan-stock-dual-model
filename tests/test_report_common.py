@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from value_screener.report_common import (  # noqa: E402
     build_checks_panel,
     build_freshness_banner,
+    build_monitor_status,
     format_rank_change,
     load_rank_comparison,
 )
@@ -82,6 +83,30 @@ class ReportCommonTests(unittest.TestCase):
         self.assertFalse(comparison["comparable"])
         self.assertEqual(format_rank_change({"stock_id": "1111", "rank": 1}, comparison), "資料不可比")
 
+    def test_comparison_uses_last_record_for_same_prior_market_date(self) -> None:
+        records = [
+            {
+                "model_id": "defensive_value",
+                "as_of": "2026-07-30",
+                "latest_market_date": "2026-07-30",
+                "eligible_for_backtest": True,
+                "rankings": [{"stock_id": "1111", "rank": 8}],
+            },
+            {
+                "model_id": "defensive_value",
+                "as_of": "2026-07-31",
+                "latest_market_date": "2026-07-30",
+                "eligible_for_backtest": True,
+                "rankings": [{"stock_id": "1111", "rank": 3}],
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "history.jsonl"
+            path.write_text("".join(json.dumps(item) + "\n" for item in records), encoding="utf-8")
+            comparison = load_rank_comparison(_result(), path)
+        self.assertEqual(comparison["prior_as_of"], "2026-07-31")
+        self.assertEqual(format_rank_change({"stock_id": "1111", "rank": 1}, comparison), "↑2")
+
     def test_panels_show_signal_freshness_and_all_check_states(self) -> None:
         metadata = _result()["metadata"]
         metadata["revenue_signal_coverage"]["universe"] = 0.002
@@ -93,6 +118,23 @@ class ReportCommonTests(unittest.TestCase):
         self.assertIn("0.2%", banner)
         self.assertIn("status fail", panel)
         self.assertIn("80.0%", panel)
+
+    def test_monitor_status_is_collapsed_for_ok_and_open_for_abnormal(self) -> None:
+        ok = build_monitor_status(
+            _result()["metadata"],
+            [{"check": "測試", "actual": 1, "expected": 1, "status": "OK", "notes": ""}],
+            stats=[("硬門檻通過", 20)],
+        )
+        self.assertIn('class="statusbox ok"', ok)
+        self.assertNotIn('class="statusbox ok" open', ok)
+        warned_metadata = _result(status="WARN")["metadata"]
+        warned = build_monitor_status(
+            warned_metadata,
+            [{"check": "測試", "actual": 0, "expected": 1, "status": "WARN", "notes": ""}],
+            stats=[("硬門檻通過", 0)],
+        )
+        self.assertIn('class="statusbox warn" open', warned)
+        self.assertIn("檢核 0/1 通過", warned)
 
 
 if __name__ == "__main__":

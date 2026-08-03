@@ -6,8 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from .report_common import (
-    build_freshness_banner,
+    build_monitor_status,
     current_report_comparability,
+    monitor_report_css,
     score_composition_bar,
     sortable_cell,
     sortable_table_script,
@@ -31,29 +32,35 @@ def _model_table(
         extra = enrichment.get(stock_id, {})
         if model_id == "operating_momentum":
             segments = [
-                ("營運動能", row.get("operating_momentum_score"), "operating"),
-                ("動能品質", row.get("quality_score"), "quality"),
-                ("估值流動性", row.get("valuation_liquidity_score"), "momentum-valuation"),
+                ("營運動能", row.get("operating_momentum_score"), "score-operating"),
+                ("動能品質", row.get("quality_score"), "score-quality"),
+                ("估值流動性", row.get("valuation_liquidity_score"), "score-momentum-valuation"),
             ]
         else:
             segments = [
-                ("防禦", row.get("defense_score"), "defense"),
-                ("估值", row.get("valuation_score"), "valuation"),
-                ("動能", row.get("momentum_score"), "momentum"),
+                ("防禦", row.get("defense_score"), "score-defense"),
+                ("估值", row.get("valuation_score"), "score-valuation"),
+                ("動能", row.get("momentum_score"), "score-momentum"),
             ]
-        body.append("<tr>" + "".join([
+        row_id = f"{model_id}-{stock_id}"
+        body.append(f'<tr data-row-id="{html.escape(row_id, quote=True)}">' + "".join([
             sortable_cell(str(row["rank"]), row["rank"]),
             sortable_cell(f"<strong>{html.escape(stock_id)}</strong>", stock_id),
             sortable_cell(html.escape(str(row.get("stock_name") or "")), row.get("stock_name")),
             sortable_cell(html.escape(str(row.get("industry") or "")), row.get("industry")),
-            sortable_cell(f"{float(row.get('total_score') or 0):.1f}", row.get("total_score")),
             sortable_cell(score_composition_bar(segments), row.get("total_score"), css_class="composition"),
-            sortable_cell(html.escape(extra.get("technical", "—")), extra.get("technical", "—"), css_class="enrichment"),
-            sortable_cell(html.escape(extra.get("chip", "—")), extra.get("chip", "—"), css_class="enrichment"),
-        ]) + "</tr>")
+            sortable_cell(f"{float(row.get('total_score') or 0):.1f}", row.get("total_score"), css_class="total"),
+        ]) + "</tr>" + (
+            f'<tr class="row-detail" data-detail-for="{html.escape(row_id, quote=True)}"><td colspan="6">'
+            '<details><summary>技術面與籌碼面</summary><div class="research-grid">'
+            f'<div><b>技術面</b><br>{html.escape(extra.get("technical", "—"))}</div>'
+            f'<div><b>籌碼面</b><br>{html.escape(extra.get("chip", "—"))}</div>'
+            '<div><b>定位</b><br>外部研究資訊，不進入模型分數、硬門檻或排名。</div>'
+            '</div></details></td></tr>'
+        ))
     headers = [
         ("排名", "number"), ("代碼", "text"), ("公司", "text"), ("產業", "text"),
-        ("總分", "number"), ("分數組成", "number"), ("技術面", "text"), ("籌碼面", "text"),
+        ("分數組成", "number"), ("總分", "number"),
     ]
     head = "".join(f'<th data-type="{kind}">{html.escape(label)}</th>' for label, kind in headers)
     return f'<table class="sortable-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table>'
@@ -111,25 +118,39 @@ def build_combined_html(
         intersection_note = "資料不可比（" + "；".join(reasons) + "）"
         intersection = '<p class="unavailable">本次不產生雙模型交集，避免把失效或不同步資料解讀為研究訊號。</p>'
 
+    intersection_count = len(intersection_ids) if comparable else "—"
+    value_status = build_monitor_status(
+        value_meta,
+        value_result.get("checks", []),
+        stats=[
+            ("普通股母體", value_meta.get("universe_count")),
+            ("一般公司", value_meta.get("operating_company_count")),
+            ("硬門檻通過", value_meta.get("hard_pass_count")),
+            ("雙模型交集", intersection_count),
+        ],
+        extra_summary="防禦型價值",
+    )
+    momentum_status = build_monitor_status(
+        momentum_meta,
+        momentum_result.get("checks", []),
+        stats=[
+            ("普通股母體", momentum_meta.get("universe_count")),
+            ("硬門檻通過", momentum_meta.get("hard_pass_count")),
+            ("轉機觀察", momentum_meta.get("turnaround_count")),
+            ("雙模型交集", intersection_count),
+        ],
+        extra_summary="營運動能",
+    )
     sortable_script = sortable_table_script()
     return f"""<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>台股雙模型研究報告｜{html.escape(str(value_meta.get('as_of') or ''))}</title>
-<style>
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;margin:0;background:#f4f6f8;color:#172033}} .wrap{{max-width:1400px;margin:auto;padding:30px}}
-.hero{{background:linear-gradient(120deg,#12263f,#173f35);color:white;border-radius:18px;padding:28px 32px}} .hero h1{{margin:0 0 8px}} .hero p{{margin:0;color:#d7e3ec}}
-.grid{{display:grid;grid-template-columns:1fr 1fr;gap:18px}} .panel{{background:white;border-radius:14px;padding:20px;margin-top:18px;overflow:auto;box-shadow:0 2px 14px #15324f14}}
-.freshness{{margin:12px 0;padding:9px 12px;border-radius:9px;font-size:13px;font-weight:650}} .freshness.good{{background:#dcfce7;color:#14532d}} .freshness.bad{{background:#fee2e2;color:#991b1b}}
-table{{width:100%;border-collapse:collapse;font-size:13px}} th{{background:#17324c;color:white;text-align:left;padding:9px;white-space:nowrap}} td{{padding:9px;border-bottom:1px solid #e5ebf1;white-space:nowrap}}
-.sortable{{cursor:pointer;user-select:none}} .sortable::after{{content:" ↕";color:#9fb3c8;font-size:10px}} .sortable[data-order="asc"]::after{{content:" ↑"}} .sortable[data-order="desc"]::after{{content:" ↓"}}
-.scorebar{{display:flex;width:140px;height:11px;border-radius:999px;overflow:hidden;background:#e2e8f0}} .score-segment{{display:block;height:100%}} .defense,.operating{{background:#0f766e}} .valuation,.quality{{background:#2563eb}} .momentum,.momentum-valuation{{background:#d97706}} .score-remainder{{background:#e2e8f0}}
-td.composition{{min-width:150px}} td.enrichment{{max-width:15rem;white-space:normal;line-height:1.4}} .unavailable{{background:#fee2e2;color:#991b1b;padding:14px;border-radius:10px}} .empty{{color:#64748b}} .note{{color:#526174;line-height:1.6}}
-@media(max-width:900px){{.grid{{grid-template-columns:1fr}}.wrap{{padding:14px}}}}
-</style></head><body><div class="wrap">
-<div class="hero"><h1>台股雙模型研究報告</h1><p>報表日 {html.escape(str(value_meta.get('as_of') or ''))}｜市場資料 {html.escape(str(value_meta.get('latest_market_date') or ''))}｜排名只用於研究排序，不是買進建議</p></div>
+<style>{monitor_report_css()}</style></head><body><div class="wrap">
+<div class="hero"><div><h1>台股雙模型監控台</h1><p>報表日 {html.escape(str(value_meta.get('as_of') or ''))}｜市場資料 {html.escape(str(value_meta.get('latest_market_date') or ''))}｜排名只用於研究排序，不是買進建議</p></div><div class="hero-status">交集 {html.escape(str(intersection_count))}</div></div>
+<div class="grid">{value_status}{momentum_status}</div>
 <div class="panel"><h2>雙模型交集</h2><p class="note">{html.escape(intersection_note)}</p>{intersection}</div>
-<div class="grid"><section class="panel"><h2>防禦型價值精華20</h2>{build_freshness_banner(value_meta)}{_model_table(value_focus, model_id='defensive_value', enrichment=enrichment)}</section>
-<section class="panel"><h2>營運動能精華20</h2>{build_freshness_banner(momentum_meta)}{_model_table(momentum_focus, model_id='operating_momentum', enrichment=enrichment)}</section></div>
+<div class="grid"><section class="panel"><div class="panel-head"><h2>防禦型價值精華20</h2><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{_model_table(value_focus, model_id='defensive_value', enrichment=enrichment)}</section>
+<section class="panel"><div class="panel-head"><h2>營運動能精華20</h2><div class="legend"><span class="key-dot key-first"></span>營運動能　<span class="key-dot key-second"></span>品質　<span class="key-dot key-third"></span>估值流動性</div></div>{_model_table(momentum_focus, model_id='operating_momentum', enrichment=enrichment)}</section></div>
 <p class="note">技術面與籌碼面僅為外部呈現欄位，不進入分數、硬門檻、模型狀態或排名歷史。</p>
 {sortable_script}</div></body></html>"""
 
