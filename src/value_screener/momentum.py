@@ -8,6 +8,7 @@ from typing import Any
 from .model import clamp, descending_score, linear_score
 from .quality import (
     aggregate_check_status,
+    hard_pass_count_check,
     revenue_signal_coverage_metadata,
     revenue_signal_coverage_metrics,
 )
@@ -406,14 +407,10 @@ def build_momentum_result(base_result: dict[str, Any], config: dict[str, Any]) -
             "status": "OK" if cash_conversion_coverage >= cash_conversion_threshold else "WARN",
             "notes": "最近完整年度營業現金流／淨利",
         },
-        {
-            "check": "量化硬門檻通過數",
-            "actual": hard_pass_count,
-            "expected": 1,
-            "tolerance": 0,
-            "status": "OK" if hard_pass_count >= 1 else "WARN",
-            "notes": "0檔代表目前沒有符合完整條件的公司",
-        },
+        hard_pass_count_check(
+            hard_pass_count,
+            notes="0 檔表示本次無法產生可用候選排名；不代表程式執行錯誤",
+        ),
         {
             "check": "共用資料模型狀態",
             "actual": base_data_status,

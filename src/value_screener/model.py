@@ -8,7 +8,12 @@ from datetime import date
 from typing import Any, Iterable
 
 from .dates import previous_quarter
-from .quality import aggregate_check_status, revenue_coverage_checks, revenue_signal_coverage_metadata
+from .quality import (
+    aggregate_check_status,
+    hard_pass_count_check,
+    revenue_coverage_checks,
+    revenue_signal_coverage_metadata,
+)
 
 
 def as_number(value: Any) -> float | None:
@@ -730,14 +735,10 @@ def analyze(
             "notes": "新上市公司與資料缺漏會降低覆蓋",
         },
         *revenue_checks,
-        {
-            "check": "量化硬門檻通過數",
-            "actual": hard_pass_count,
-            "expected": 1,
-            "tolerance": 0,
-            "status": "OK" if hard_pass_count >= 1 else "WARN",
-            "notes": "門檻刻意嚴格；0 檔不代表程式錯誤",
-        },
+        hard_pass_count_check(
+            hard_pass_count,
+            notes="0 檔表示本次無法產生可用候選排名；不代表程式執行錯誤",
+        ),
         {
             "check": "未識別有息負債標籤",
             "actual": len(unknown_debt_types),

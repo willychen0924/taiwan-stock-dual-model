@@ -12,6 +12,17 @@ def aggregate_check_status(checks: Iterable[dict[str, Any]]) -> str:
     return "OK"
 
 
+def hard_pass_count_check(count: int, *, notes: str) -> dict[str, Any]:
+    return {
+        "check": "量化硬門檻通過數",
+        "actual": count,
+        "expected": 1,
+        "tolerance": 0,
+        "status": "OK" if count >= 1 else "FAIL",
+        "notes": notes,
+    }
+
+
 def _coverage(rows: list[dict[str, Any]], key: str) -> float:
     if not rows:
         return 0.0

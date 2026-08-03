@@ -70,6 +70,14 @@ class MomentumModelTests(unittest.TestCase):
         self.assertEqual(result["metadata"]["model_status"], "FAIL")
         self.assertFalse(output["hard_pass"])
 
+    def test_zero_qualifying_rows_fail_model(self) -> None:
+        row = self._base_row()
+        row["avg_daily_turnover"] = 1
+        result = build_momentum_result(self._base_result(row), self.config)
+        hard_pass = next(item for item in result["checks"] if item["check"] == "量化硬門檻通過數")
+        self.assertEqual(hard_pass["status"], "FAIL")
+        self.assertEqual(result["metadata"]["model_status"], "FAIL")
+
     def test_missing_prior_income_is_labeled_without_becoming_turnaround(self) -> None:
         row = self._base_row()
         row["prior_ttm_net_income"] = None

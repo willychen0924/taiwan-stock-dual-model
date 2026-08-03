@@ -18,7 +18,11 @@ from value_screener.model import (  # noqa: E402
     parse_cashflow,
     revenue_window_yoy,
 )
-from value_screener.quality import revenue_coverage_checks, revenue_signal_coverage_metrics  # noqa: E402
+from value_screener.quality import (  # noqa: E402
+    hard_pass_count_check,
+    revenue_coverage_checks,
+    revenue_signal_coverage_metrics,
+)
 from value_screener.dates import latest_complete_quarter  # noqa: E402
 from value_screener.pipeline import _require_latest_snapshots, _select_recent_trading_dates  # noqa: E402
 from datetime import date
@@ -34,6 +38,10 @@ class ScoreTests(unittest.TestCase):
         self.assertEqual(descending_score(5, 10, 40, 4), 4)
         self.assertEqual(descending_score(50, 10, 40, 4), 0)
         self.assertAlmostEqual(descending_score(25, 10, 40, 4), 2)
+
+    def test_zero_hard_pass_is_model_failure(self) -> None:
+        self.assertEqual(hard_pass_count_check(0, notes="測試")["status"], "FAIL")
+        self.assertEqual(hard_pass_count_check(1, notes="測試")["status"], "OK")
 
     def test_revenue_coverage_uses_only_hard_pass_rows(self) -> None:
         rows = [

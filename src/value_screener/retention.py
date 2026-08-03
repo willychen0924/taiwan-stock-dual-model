@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Mapping
 
 
 def iter_expired_dated_directories(root: Path, *, as_of: date, keep_days: int = 7) -> list[Path]:
@@ -32,3 +33,21 @@ def cleanup_dated_directories(roots: list[Path], *, as_of: date, keep_days: int 
             shutil.rmtree(path)
             deleted.append(path)
     return deleted
+
+
+def cleanup_dated_directories_by_root(
+    retention: Mapping[Path, int],
+    *,
+    as_of: date,
+    dry_run: bool = False,
+) -> list[Path]:
+    """Apply an independent calendar-day retention period to each output root."""
+    matched: list[Path] = []
+    for root, keep_days in retention.items():
+        expired = iter_expired_dated_directories(root, as_of=as_of, keep_days=keep_days)
+        matched.extend(expired)
+        if dry_run:
+            continue
+        for path in expired:
+            shutil.rmtree(path)
+    return matched

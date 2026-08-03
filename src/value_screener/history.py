@@ -3,13 +3,46 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
 from .quality import revenue_signal_coverage_metadata, revenue_signal_coverage_metrics
 
-HISTORY_SCHEMA_VERSION = 4
+HISTORY_SCHEMA_VERSION = 5
 VOLATILE_METADATA_KEYS = {"created_at", "generated_at", "report_generated_at", "timestamp"}
+
+
+def _component_scores(row: dict[str, Any], model_id: str) -> dict[str, Any]:
+    if model_id == "operating_momentum":
+        return {
+            "operating_momentum": row.get("operating_momentum_score"),
+            "quality": row.get("quality_score"),
+            "valuation_liquidity": row.get("valuation_liquidity_score"),
+        }
+    return {
+        "defense": row.get("defense_score"),
+        "valuation": row.get("valuation_score"),
+        "momentum": row.get("momentum_score"),
+    }
+
+
+def _ranking_snapshot(row: dict[str, Any], model_id: str) -> dict[str, Any]:
+    return {
+        "stock_id": str(row["stock_id"]),
+        "stock_name": str(row.get("stock_name") or ""),
+        "rank": int(row["rank"]),
+        "total_score": row.get("total_score"),
+        "close": row.get("close"),
+        "revenue_period": str(row.get("revenue_period") or ""),
+        "funnel_stage": str(row.get("funnel_stage") or ""),
+        "industry": str(row.get("industry") or ""),
+        "market_cap": row.get("market_value"),
+        "per": row.get("per"),
+        "pbr": row.get("pbr"),
+        "components": _component_scores(row, model_id),
+    }
 
 
 def _semantic_sha256(payload: dict[str, Any]) -> str:
@@ -84,15 +117,7 @@ def build_history_record(
         source_relative = str(source_path.resolve())
 
     rankings = [
-        {
-            "stock_id": str(row["stock_id"]),
-            "stock_name": str(row.get("stock_name") or ""),
-            "rank": int(row["rank"]),
-            "total_score": row.get("total_score"),
-            "close": row.get("close"),
-            "revenue_period": str(row.get("revenue_period") or ""),
-            "funnel_stage": str(row.get("funnel_stage") or ""),
-        }
+        _ranking_snapshot(row, model_id)
         for row in sorted(ranked_rows, key=lambda item: int(item["rank"]))
     ]
 
@@ -105,6 +130,7 @@ def build_history_record(
         "model_id": model_id,
         "model_name": model_name,
         "config_version": payload.get("config", {}).get("version"),
+        "component_weights": dict(payload.get("config", {}).get("weights", {})),
         "as_of": as_of,
         "latest_market_date": str(metadata.get("latest_market_date") or ""),
         "latest_revenue_period": str(metadata.get("latest_revenue_period") or ""),
@@ -126,6 +152,87 @@ def build_history_record(
         "ineligible_reasons": ineligible_reasons,
         "rankings": rankings,
     }
+
+
+def migrate_history_records(
+    history_path: Path,
+    *,
+    root: Path,
+    dry_run: bool = False,
+) -> dict[str, int]:
+    """One-time, source-hash-verified enrichment of older history records.
+
+    Records whose original report bytes are no longer available are intentionally
+    left untouched. Existing audit fields and report order are never recomputed.
+    """
+    stats = {"records": 0, "migrated": 0, "already_current": 0, "source_mismatch": 0, "inconsistent": 0}
+    if not history_path.exists():
+        return stats
+
+    with history_path.open("r", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        records = [json.loads(line) for line in handle if line.strip()]
+        stats["records"] = len(records)
+        output: list[dict[str, Any]] = []
+
+        for record in records:
+            source_label = str(record.get("source_path") or "")
+            source_path = Path(source_label)
+            if not source_path.is_absolute():
+                source_path = root / source_path
+            if not source_path.exists():
+                stats["source_mismatch"] += 1
+                output.append(record)
+                continue
+            source_bytes = source_path.read_bytes()
+            if hashlib.sha256(source_bytes).hexdigest() != str(record.get("source_sha256") or ""):
+                stats["source_mismatch"] += 1
+                output.append(record)
+                continue
+
+            payload = json.loads(source_bytes)
+            model_id = str(record.get("model_id") or payload.get("metadata", {}).get("model_id") or "defensive_value")
+            ranked_rows = sorted(
+                (row for row in payload.get("results", []) if row.get("hard_pass")),
+                key=lambda row: int(row["rank"]),
+            )
+            snapshots = [_ranking_snapshot(row, model_id) for row in ranked_rows]
+            existing_rankings = list(record.get("rankings", []))
+            comparable_keys = {"stock_id", "stock_name", "rank", "total_score", "close", "revenue_period", "funnel_stage"}
+            is_consistent = len(existing_rankings) == len(snapshots) and all(
+                all(old.get(key) == new.get(key) for key in comparable_keys if key in old)
+                for old, new in zip(existing_rankings, snapshots)
+            )
+            if not is_consistent:
+                stats["inconsistent"] += 1
+                output.append(record)
+                continue
+
+            enriched = dict(record)
+            enriched["schema_version"] = HISTORY_SCHEMA_VERSION
+            enriched["component_weights"] = dict(payload.get("config", {}).get("weights", {}))
+            enriched["rankings"] = [{**old, **new} for old, new in zip(existing_rankings, snapshots)]
+            if enriched == record:
+                stats["already_current"] += 1
+            else:
+                stats["migrated"] += 1
+            output.append(enriched)
+
+        if stats["migrated"] and not dry_run:
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            fd, temporary_name = tempfile.mkstemp(prefix=history_path.name + ".", suffix=".tmp", dir=history_path.parent)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as temporary:
+                    for record in output:
+                        temporary.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+                    temporary.flush()
+                    os.fsync(temporary.fileno())
+                os.replace(temporary_name, history_path)
+            finally:
+                if os.path.exists(temporary_name):
+                    os.unlink(temporary_name)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    return stats
 
 
 def append_history_records(
