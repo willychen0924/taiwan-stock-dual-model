@@ -81,7 +81,7 @@ class ReportCommonTests(unittest.TestCase):
         result = _result(status="WARN")
         comparison = load_rank_comparison(result, None)
         self.assertFalse(comparison["comparable"])
-        self.assertEqual(format_rank_change({"stock_id": "1111", "rank": 1}, comparison), "資料不可比")
+        self.assertEqual(format_rank_change({"stock_id": "1111", "rank": 1}, comparison), "-")
 
     def test_comparison_uses_last_record_for_same_prior_market_date(self) -> None:
         records = [

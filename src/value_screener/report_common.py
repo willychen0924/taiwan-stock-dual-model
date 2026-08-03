@@ -78,7 +78,7 @@ def load_rank_comparison(
 
 def format_rank_change(row: dict[str, Any], comparison: dict[str, Any]) -> str:
     if not comparison.get("comparable"):
-        return "資料不可比"
+        return "-"
     if not comparison.get("prior_market_date"):
         return "—"
     previous_rank = comparison.get("prior_ranks", {}).get(str(row.get("stock_id") or ""))
