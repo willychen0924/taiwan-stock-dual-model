@@ -16,14 +16,32 @@ NODE_BIN="${NODE_BIN:-$DEFAULT_NODE}"
 
 cd "$ROOT"
 "$PYTHON_BIN" scripts/run_screen.py --as-of "$AS_OF" "$@"
-"$NODE_BIN" scripts/build_report.mjs \
-  reports/latest/screening_results.json \
-  "outputs/${AS_OF}/台股價值篩選_${AS_OF}.xlsx"
-"$NODE_BIN" scripts/build_momentum_report.mjs \
-  reports/momentum/latest/screening_results.json \
-  "outputs/${AS_OF}/台股營運動能_${AS_OF}.xlsx"
 "$PYTHON_BIN" scripts/update_rankings_history.py
+
+EXCEL_AVAILABLE=1
+if ! "$NODE_BIN" --version >/dev/null 2>&1; then
+  EXCEL_AVAILABLE=0
+  print -u2 "警告：找不到可用的 Node.js；JSON、CSV、HTML 與排名歷史已完成，略過 Excel。"
+elif ! "$NODE_BIN" -e 'import("@oai/artifact-tool")' >/dev/null 2>&1; then
+  EXCEL_AVAILABLE=0
+  print -u2 "警告：找不到 @oai/artifact-tool（預期版本見 config/report_toolchain.json）；JSON、CSV、HTML 與排名歷史已完成，略過 Excel。"
+fi
+
+if (( EXCEL_AVAILABLE )); then
+  "$NODE_BIN" scripts/build_report.mjs \
+    reports/latest/screening_results.json \
+    "outputs/${AS_OF}/台股價值篩選_${AS_OF}.xlsx"
+  "$NODE_BIN" scripts/build_momentum_report.mjs \
+    reports/momentum/latest/screening_results.json \
+    "outputs/${AS_OF}/台股營運動能_${AS_OF}.xlsx"
+fi
+
 "$PYTHON_BIN" scripts/cleanup_old_reports.py --as-of "$AS_OF" --keep-days 7
 
-print "完成：outputs/${AS_OF}/台股價值篩選_${AS_OF}.xlsx"
-print "完成：outputs/${AS_OF}/台股營運動能_${AS_OF}.xlsx"
+print "完成：reports/latest 與 reports/momentum/latest 的 JSON、CSV、HTML"
+if (( EXCEL_AVAILABLE )); then
+  print "完成：outputs/${AS_OF}/台股價值篩選_${AS_OF}.xlsx"
+  print "完成：outputs/${AS_OF}/台股營運動能_${AS_OF}.xlsx"
+else
+  print "Excel：本次略過；補齊 config/report_toolchain.json 所列工具鏈後可單獨重建。"
+fi
