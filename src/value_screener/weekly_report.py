@@ -183,7 +183,7 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         stability_rows.append(
             "<tr>"
             f'<td class="stock-id">{html.escape(stock_id)}</td><td>{html.escape(str(item.get("stock_name") or ""))}</td>'
-            f'<td class="number">{days}/{len(segment)}</td><td class="number">{streak}</td>'
+            f'<td class="number">{days}／{streak}</td>'
             f'<td><span class="stability"><i style="width:{days / len(segment):.1%}"></i></span></td>'
             f'<td class="number">{int(item["rank"])}</td></tr>'
         )
@@ -234,8 +234,8 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         comparisons = '<p class="weekly-warning">同版本有效觀測只有1日，暫不計算進出榜與名次變化。</p>'
     else:
         comparisons = f"""
-<h3>精華20期初至期末淨進出</h3><div class="inout"><div><b class="in">進榜</b>{_chips(incoming, 'in')}</div><div><b class="out">掉出</b>{_chips(outgoing, 'out')}</div></div>
-<h3>期末精華20穩定度</h3><p class="note">在榜日以本段有效市場觀測為分母；最長連續是實際連續出現在精華20的觀測數。</p><div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th><th class="number">在榜日</th><th class="number">最長連續</th><th>穩定度</th><th class="number">期末名次</th></tr></thead><tbody>{''.join(stability_rows)}</tbody></table></div>
+<h3>精華20名單變動</h3><div class="inout"><div><b class="in">新增</b>{_chips(incoming, 'in')}</div><div><b class="out">移出</b>{_chips(outgoing, 'out')}</div></div>
+<h3>期末精華20穩定度</h3><p class="note">穩定度以本段有效市場觀測為分母；最長連續為連續入選精華20的觀測數。</p><div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th><th class="number">在榜日／最長連續</th><th>穩定度</th><th class="number">期末名次</th></tr></thead><tbody>{''.join(stability_rows)}</tbody></table></div>
 <h3>重大名次變化</h3><p class="note">只比較期初與期末皆在硬門檻排名內的公司，列出絕對變動最大的10檔。</p><div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th><th class="number">期初</th><th class="number">期末</th><th class="number">變動</th></tr></thead><tbody>{change_rows}</tbody></table></div>
 {component_table}"""
     return segment_note + comparisons
