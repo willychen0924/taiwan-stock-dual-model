@@ -147,12 +147,9 @@ body{{margin:0;background:#faf6ef;color:#251f19;font-size:13px;
 .tabs label{{padding:8px 20px;font-size:14.5px;cursor:pointer;color:#6d6055;font-weight:600;
  border-radius:999px;user-select:none;transition:background .15s,color .15s;white-space:nowrap}}
 .tabs label:hover{{background:#e8dcc9}}
-.tabs .cnt{{display:inline-block;margin-left:6px;background:rgba(37,31,25,.1);color:#6d6055;
- border-radius:999px;padding:1px 7px;font-size:11px;font-weight:700}}
 #t-momentum:checked ~ .head .tabs label[for=t-momentum],
 #t-value:checked    ~ .head .tabs label[for=t-value],
 #t-inter:checked    ~ .head .tabs label[for=t-inter]{{background:#3a2c22;color:#fff;font-weight:700}}
-#t-inter:checked ~ .head .tabs label[for=t-inter] .cnt{{background:rgba(255,255,255,.22);color:#fff}}
 
 .panel{{padding:18px 0 0;display:none}}
 #t-momentum:checked ~ #p-momentum,
