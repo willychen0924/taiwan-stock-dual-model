@@ -34,6 +34,8 @@ const workbook = Workbook.create();
 const dashboard = workbook.worksheets.add("儀表板");
 const explanation = workbook.worksheets.add("模型說明");
 const ranking = workbook.worksheets.add("量化排名");
+const rejected = workbook.worksheets.add("未通過明細");
+const audit = workbook.worksheets.add("試算稽核");
 const review = workbook.worksheets.add("人工複核");
 const assumptions = workbook.worksheets.add("參數");
 const checkSheet = workbook.worksheets.add("檢核");
@@ -54,7 +56,7 @@ const colors = {
   black: "#000000",
 };
 
-for (const sheet of [dashboard, explanation, ranking, review, assumptions, checkSheet, sources]) {
+for (const sheet of [dashboard, explanation, ranking, rejected, audit, review, assumptions, checkSheet, sources]) {
   sheet.showGridLines = false;
 }
 
@@ -216,27 +218,102 @@ setColumnWidth(assumptions, "D", 47, 12);
 setColumnWidth(assumptions, "E", 47, 48);
 assumptions.freezePanes.freezeRows(4);
 
-// 全市場排名
-titleBand(ranking, "A1:AS1", "台股全市場量化排名");
-ranking.getRange("A2:AS2").merge();
-ranking.getRange("A2").values = [[`市場資料 ${meta.latest_market_date}｜完整財報季 ${meta.latest_financial_quarter}｜一般公司模型；金融業僅列示、不混合評分。`]];
+// 精簡主排名：只呈現通過硬門檻的公司，所有分數均為本次模型輸出的靜態值。
+const passingRows = results.filter((row) => row.hard_pass);
+const rejectedRows = results.filter((row) => !row.hard_pass);
+titleBand(ranking, "A1:U1", "台股量化排名｜硬門檻通過");
+ranking.getRange("A2:U2").merge();
+ranking.getRange("A2").values = [[`市場資料 ${meta.latest_market_date}｜完整財報季 ${meta.latest_financial_quarter}｜共 ${passingRows.length} 檔；完整欄位請查 screening_results.csv。`]];
 ranking.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
-ranking.getRange("A3:AS3").merge();
-ranking.getRange("A3").values = [["排名順序依本次掃描結果固定；調整參數可即時重算分數，但須重新執行掃描才會重新排序。"]];
+ranking.getRange("A3:U3").merge();
+ranking.getRange("A3").values = [["本頁為靜態模型結果，不因工作簿參數變動而改寫；公式重算與抽樣驗證請見「試算稽核」。"]];
 ranking.getRange("A3").format = { font: { italic: true, color: colors.gray } };
+const mainHeaders = [
+  "排名", "代碼", "公司", "產業", "漏斗階段", "治理狀態", "收盤價", "市值(億元)", "20日均成交額(百萬元)",
+  "PER", "PBR", "淨現金/市值", "流動比率", "負債/資產", "清算覆蓋", "近3月營收YoY", "TTM淨利成長",
+  "防禦分", "估值分", "動能分", "總分",
+];
+ranking.getRange("A5:U5").values = [mainHeaders];
+formatHeader(ranking.getRange("A5:U5"));
+ranking.getRange("A5:U5").format.rowHeight = 44;
+const mainRows = passingRows.map((row) => [
+  row.rank, row.stock_id, row.stock_name, row.industry, row.funnel_stage, row.governance_status, row.close,
+  scaled(row.market_value, HUNDRED_MILLION), scaled(row.avg_daily_turnover, MILLION), row.per, row.pbr,
+  row.net_cash_ratio, row.current_ratio, row.liabilities_ratio, row.liquidation_coverage, row.revenue_3m_yoy,
+  row.ttm_net_income_growth, row.defense_score, row.valuation_score, row.momentum_score, row.total_score,
+]);
+const rankingLastRow = 5 + mainRows.length;
+if (mainRows.length) {
+  ranking.getRange(`A6:U${rankingLastRow}`).values = mainRows;
+  ranking.getRange(`G6:G${rankingLastRow}`).format.numberFormat = "#,##0.00;[Red](#,##0.00);-";
+  ranking.getRange(`H6:H${rankingLastRow}`).format.numberFormat = '#,##0.0"億";[Red](#,##0.0"億");-';
+  ranking.getRange(`I6:I${rankingLastRow}`).format.numberFormat = '#,##0"百萬";[Red](#,##0"百萬");-';
+  ranking.getRange(`J6:K${rankingLastRow}`).format.numberFormat = "0.0x;[Red](0.0x);-";
+  ranking.getRange(`L6:L${rankingLastRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
+  ranking.getRange(`M6:M${rankingLastRow}`).format.numberFormat = "0.00x;[Red](0.00x);-";
+  ranking.getRange(`N6:Q${rankingLastRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
+  ranking.getRange(`R6:U${rankingLastRow}`).format.numberFormat = "0.0";
+  ranking.getRange(`U6:U${rankingLastRow}`).conditionalFormats.add("colorScale", {
+    criteria: [
+      { type: "lowestValue", color: "#FEE2E2" },
+      { type: "percentile", value: 50, color: "#FEF3C7" },
+      { type: "highestValue", color: "#DCFCE7" },
+    ],
+  });
+  const table = ranking.tables.add(`A5:U${rankingLastRow}`, true, "PassingRankingTable");
+  table.style = "TableStyleMedium2";
+}
+ranking.freezePanes.freezeRows(5);
+ranking.freezePanes.freezeColumns(4);
+const mainWidths = { A: 8, B: 9, C: 15, D: 17, E: 12, F: 12, G: 11, H: 14, I: 18, J: 10, K: 10, L: 14, M: 12, N: 12, O: 12, P: 15, Q: 15, R: 10, S: 10, T: 10, U: 10 };
+for (const [col, width] of Object.entries(mainWidths)) setColumnWidth(ranking, col, Math.max(6, rankingLastRow), width);
 
-const headers = [
+// 未通過公司另表列示原因，避免主排名被兩千多列稀釋。
+titleBand(rejected, "A1:F1", "未通過硬門檻明細");
+rejected.getRange("A2:F2").merge();
+rejected.getRange("A2").values = [[`共 ${rejectedRows.length} 檔；完整 45 欄原始結果保留於 reports/${meta.as_of}/screening_results.csv。`]];
+rejected.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
+rejected.getRange("A5:F5").values = [["代碼", "公司", "產業", "未通過原因", "缺漏旗標", "總分"]];
+formatHeader(rejected.getRange("A5:F5"));
+const rejectedValues = rejectedRows.map((row) => [row.stock_id, row.stock_name, row.industry, row.exclusion_reasons, row.missing_flags, row.total_score]);
+const rejectedLastRow = 5 + rejectedValues.length;
+if (rejectedValues.length) {
+  rejected.getRange(`A6:F${rejectedLastRow}`).values = rejectedValues;
+  rejected.getRange(`D6:E${rejectedLastRow}`).format.wrapText = true;
+  rejected.getRange(`F6:F${rejectedLastRow}`).format.numberFormat = "0.0";
+  const table = rejected.tables.add(`A5:F${rejectedLastRow}`, true, "RejectedDetailTable");
+  table.style = "TableStyleMedium2";
+}
+rejected.freezePanes.freezeRows(5);
+for (const [col, width] of Object.entries({ A: 9, B: 15, C: 18, D: 48, E: 24, F: 10 })) setColumnWidth(rejected, col, Math.max(6, rejectedLastRow), width);
+
+// 代表性試算稽核：涵蓋前段、邊界、硬門檻尾端與缺值／未通過案例。
+const selectedAuditRows = new Map();
+function includeAuditRow(row) {
+  if (row) selectedAuditRows.set(row.stock_id, row);
+}
+for (const rank of [1, 10, 20, 100, 200]) includeAuditRow(passingRows.find((row) => row.rank === rank));
+includeAuditRow(passingRows.at(-1));
+includeAuditRow(rejectedRows[0]);
+includeAuditRow(rejectedRows.find((row) => row.missing_flags));
+includeAuditRow(rejectedRows.find((row) => String(row.exclusion_reasons || "").includes("成交")));
+includeAuditRow(rejectedRows.find((row) => String(row.exclusion_reasons || "").includes("負債")));
+const auditRows = [...selectedAuditRows.values()];
+titleBand(audit, "A1:AS1", "代表性公式試算稽核");
+audit.getRange("A2:AS2").merge();
+audit.getRange("A2").values = [[`抽查 ${auditRows.length} 檔：排名前段／第20、100、200名／最後通過者／缺值與未通過案例；綠字公式須與 Python pipeline 一致。`]];
+audit.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
+const auditHeaders = [
   "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "市值(億元)",
   "20日均成交額(百萬元)", "PER", "PBR", "現金(百萬元)", "有息負債(百萬元)", "流動資產(百萬元)", "流動負債(百萬元)", "總負債(百萬元)", "總資產(百萬元)", "應收款(百萬元)",
   "存貨(百萬元)", "流動金融資產(百萬元)", "不動產廠房設備(百萬元)", "淨現金/市值", "流動比率", "負債/資產", "負債/現金", "保守清算價值(百萬元)", "清算覆蓋", "獲利年數",
   "完整獲利年數", "正FCF年數", "近3月營收YoY", "單月營收YoY", "TTM營益率", "TTM淨利成長", "同業PER分位", "同業PBR分位", "同業營益率分位", "防禦分",
   "估值分", "動能分", "總分", "硬門檻", "缺漏旗標",
 ];
-ranking.getRange("A5:AS5").values = [headers];
-formatHeader(ranking.getRange("A5:AS5"));
-ranking.getRange("A5:AS5").format.rowHeight = 44;
-
-const rankingRows = results.map((row) => [
+audit.getRange("A5:AS5").values = [auditHeaders];
+formatHeader(audit.getRange("A5:AS5"));
+audit.getRange("A5:AS5").format.rowHeight = 44;
+const auditValues = auditRows.map((row) => [
   row.rank, row.stock_id, row.stock_name, row.industry, row.market, row.funnel_stage, row.governance_status,
   row.exclusion_reasons, row.close, scaled(row.market_value, HUNDRED_MILLION), scaled(row.avg_daily_turnover, MILLION), row.per, row.pbr, scaled(row.cash, MILLION), scaled(row.debt, MILLION),
   scaled(row.current_assets, MILLION), scaled(row.current_liabilities, MILLION), scaled(row.liabilities, MILLION), scaled(row.total_assets, MILLION), scaled(row.receivables, MILLION), scaled(row.inventory, MILLION),
@@ -245,73 +322,54 @@ const rankingRows = results.map((row) => [
   row.ttm_net_income_growth, row.sector_per_percentile, row.sector_pbr_percentile, row.sector_margin_percentile,
   null, null, null, null, row.hard_pass, row.missing_flags,
 ]);
-const firstDataRow = 6;
-const lastDataRow = firstDataRow + rankingRows.length - 1;
-if (rankingRows.length) {
-  ranking.getRange(`A${firstDataRow}:AS${lastDataRow}`).values = rankingRows;
-  const formulaRows = results.map((_, index) => firstDataRow + index);
-  ranking.getRange(`X${firstDataRow}:X${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR((N${r}-O${r})/(J${r}*100),0)`]);
-  ranking.getRange(`Y${firstDataRow}:Y${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(P${r}/Q${r},0)`]);
-  ranking.getRange(`Z${firstDataRow}:Z${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(R${r}/S${r},0)`]);
-  ranking.getRange(`AA${firstDataRow}:AA${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(O${r}/N${r},999)`]);
-  ranking.getRange(`AB${firstDataRow}:AB${lastDataRow}`).formulas = formulaRows.map((r) => [
-    `=N${r}*'參數'!$C$5+V${r}*'參數'!$C$6+T${r}*'參數'!$C$7+U${r}*'參數'!$C$8+W${r}*'參數'!$C$9-R${r}`,
+const auditFirstDataRow = 6;
+const auditLastRow = 5 + auditValues.length;
+if (auditValues.length) {
+  audit.getRange(`A${auditFirstDataRow}:AS${auditLastRow}`).values = auditValues;
+  const formulaRows = auditRows.map((_, index) => auditFirstDataRow + index);
+  audit.getRange(`X${auditFirstDataRow}:X${auditLastRow}`).formulas = formulaRows.map((r) => [`=IFERROR((N${r}-O${r})/(J${r}*100),0)`]);
+  audit.getRange(`Y${auditFirstDataRow}:Y${auditLastRow}`).formulas = formulaRows.map((r) => [`=IFERROR(P${r}/Q${r},0)`]);
+  audit.getRange(`Z${auditFirstDataRow}:Z${auditLastRow}`).formulas = formulaRows.map((r) => [`=IFERROR(R${r}/S${r},0)`]);
+  audit.getRange(`AA${auditFirstDataRow}:AA${auditLastRow}`).formulas = formulaRows.map((r) => [`=IFERROR(O${r}/N${r},999)`]);
+  audit.getRange(`AB${auditFirstDataRow}:AB${auditLastRow}`).formulas = formulaRows.map((r) => [
+    `=IF(OR(R${r}="",NOT(ISNUMBER(R${r}))),"",N${r}*'參數'!$C$5+V${r}*'參數'!$C$6+T${r}*'參數'!$C$7+U${r}*'參數'!$C$8+W${r}*'參數'!$C$9-R${r})`,
   ]);
-  ranking.getRange(`AC${firstDataRow}:AC${lastDataRow}`).formulas = formulaRows.map((r) => [`=IFERROR(AB${r}/(J${r}*100),0)`]);
-  ranking.getRange(`AN${firstDataRow}:AN${lastDataRow}`).formulas = formulaRows.map((r) => [
+  audit.getRange(`AC${auditFirstDataRow}:AC${auditLastRow}`).formulas = formulaRows.map((r) => [`=IFERROR(AB${r}/(J${r}*100),0)`]);
+  audit.getRange(`AN${auditFirstDataRow}:AN${auditLastRow}`).formulas = formulaRows.map((r) => [
     `=${linearFormula(`X${r}`, "'參數'!$C$25", "'參數'!$C$26", 15)}+${linearFormula(`Y${r}`, "'參數'!$C$27", "'參數'!$C$28", 10)}+${descendingFormula(`Z${r}`, "'參數'!$C$29", "'參數'!$C$30", 10)}+10*MAX(0,MIN(1,AD${r}/'參數'!$C$14))+5*MAX(0,MIN(1,AF${r}/'參數'!$C$22))`,
   ]);
-  ranking.getRange(`AO${firstDataRow}:AO${lastDataRow}`).formulas = formulaRows.map((r) => [
+  audit.getRange(`AO${auditFirstDataRow}:AO${auditLastRow}`).formulas = formulaRows.map((r) => [
     `=${linearFormula(`AC${r}`, "'參數'!$C$31", "'參數'!$C$32", 12)}+IFERROR(10*(1-AK${r}),0)+IFERROR(4*(1-AL${r}),0)+${descendingFormula(`L${r}`, "'參數'!$C$33", "'參數'!$C$34", 4)}`,
   ]);
-  ranking.getRange(`AP${firstDataRow}:AP${lastDataRow}`).formulas = formulaRows.map((r) => [
+  audit.getRange(`AP${auditFirstDataRow}:AP${auditLastRow}`).formulas = formulaRows.map((r) => [
     `=${linearFormula(`AG${r}`, "'參數'!$C$35", "'參數'!$C$36", 8)}+${linearFormula(`AH${r}`, "'參數'!$C$35", "'參數'!$C$36", 4)}+IFERROR(4*AM${r},0)+${linearFormula(`AJ${r}`, "'參數'!$C$35", "'參數'!$C$36", 4)}`,
   ]);
-  ranking.getRange(`AQ${firstDataRow}:AQ${lastDataRow}`).formulas = formulaRows.map((r) => [`=SUM(AN${r}:AP${r})`]);
-  ranking.getRange(`A${firstDataRow}:AS${lastDataRow}`).format.font.size = 9;
-  ranking.getRange(`B${firstDataRow}:H${lastDataRow}`).format.horizontalAlignment = "left";
-  ranking.getRange(`I${firstDataRow}:AQ${lastDataRow}`).format.horizontalAlignment = "right";
-  ranking.getRange(`I${firstDataRow}:I${lastDataRow}`).format.numberFormat = "#,##0.00;[Red](#,##0.00);-";
-  ranking.getRange(`J${firstDataRow}:J${lastDataRow}`).format.numberFormat = '#,##0.0"億";[Red](#,##0.0"億");-';
-  ranking.getRange(`K${firstDataRow}:K${lastDataRow}`).format.numberFormat = '#,##0"百萬";[Red](#,##0"百萬");-';
-  ranking.getRange(`N${firstDataRow}:W${lastDataRow}`).format.numberFormat = "#,##0;[Red](#,##0);-";
-  ranking.getRange(`L${firstDataRow}:M${lastDataRow}`).format.numberFormat = "0.0x;[Red](0.0x);-";
-  ranking.getRange(`X${firstDataRow}:X${lastDataRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
-  ranking.getRange(`Y${firstDataRow}:Y${lastDataRow}`).format.numberFormat = "0.00x;[Red](0.00x);-";
-  ranking.getRange(`Z${firstDataRow}:Z${lastDataRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
-  ranking.getRange(`AA${firstDataRow}:AA${lastDataRow}`).format.numberFormat = "0.00x;[Red](0.00x);-";
-  ranking.getRange(`AB${firstDataRow}:AB${lastDataRow}`).format.numberFormat = "#,##0;[Red](#,##0);-";
-  ranking.getRange(`AC${firstDataRow}:AC${lastDataRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
-  ranking.getRange(`AG${firstDataRow}:AM${lastDataRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
-  ranking.getRange(`AN${firstDataRow}:AQ${lastDataRow}`).format.numberFormat = "0.0";
-  ranking.getRange(`AN${firstDataRow}:AQ${lastDataRow}`).format.font = { color: colors.green };
-  ranking.getRange(`AQ${firstDataRow}:AQ${lastDataRow}`).conditionalFormats.add("colorScale", {
-    criteria: [
-      { type: "lowestValue", color: "#FEE2E2" },
-      { type: "percentile", value: 50, color: "#FEF3C7" },
-      { type: "highestValue", color: "#DCFCE7" },
-    ],
-  });
-  const table = ranking.tables.add(`A5:AS${lastDataRow}`, true, "MarketRankingTable");
+  audit.getRange(`AQ${auditFirstDataRow}:AQ${auditLastRow}`).formulas = formulaRows.map((r) => [`=SUM(AN${r}:AP${r})`]);
+  audit.getRange(`I${auditFirstDataRow}:I${auditLastRow}`).format.numberFormat = "#,##0.00;[Red](#,##0.00);-";
+  audit.getRange(`J${auditFirstDataRow}:J${auditLastRow}`).format.numberFormat = '#,##0.0"億";[Red](#,##0.0"億");-';
+  audit.getRange(`K${auditFirstDataRow}:K${auditLastRow}`).format.numberFormat = '#,##0"百萬";[Red](#,##0"百萬");-';
+  audit.getRange(`N${auditFirstDataRow}:W${auditLastRow}`).format.numberFormat = "#,##0;[Red](#,##0);-";
+  audit.getRange(`L${auditFirstDataRow}:M${auditLastRow}`).format.numberFormat = "0.0x;[Red](0.0x);-";
+  audit.getRange(`X${auditFirstDataRow}:X${auditLastRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
+  audit.getRange(`Y${auditFirstDataRow}:Y${auditLastRow}`).format.numberFormat = "0.00x;[Red](0.00x);-";
+  audit.getRange(`Z${auditFirstDataRow}:Z${auditLastRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
+  audit.getRange(`AA${auditFirstDataRow}:AA${auditLastRow}`).format.numberFormat = "0.00x;[Red](0.00x);-";
+  audit.getRange(`AB${auditFirstDataRow}:AB${auditLastRow}`).format.numberFormat = "#,##0;[Red](#,##0);-";
+  audit.getRange(`AC${auditFirstDataRow}:AC${auditLastRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
+  audit.getRange(`AG${auditFirstDataRow}:AM${auditLastRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
+  audit.getRange(`AN${auditFirstDataRow}:AQ${auditLastRow}`).format.numberFormat = "0.0";
+  audit.getRange(`AN${auditFirstDataRow}:AQ${auditLastRow}`).format.font = { color: colors.green };
+  const table = audit.tables.add(`A5:AS${auditLastRow}`, true, "ValueFormulaAuditTable");
   table.style = "TableStyleMedium2";
 }
-ranking.freezePanes.freezeRows(5);
-ranking.freezePanes.freezeColumns(3);
-setColumnWidth(ranking, "A", lastDataRow, 8);
-setColumnWidth(ranking, "B", lastDataRow, 9);
-setColumnWidth(ranking, "C", lastDataRow, 14);
-setColumnWidth(ranking, "D", lastDataRow, 15);
-setColumnWidth(ranking, "E", lastDataRow, 8);
-setColumnWidth(ranking, "F", lastDataRow, 12);
-setColumnWidth(ranking, "G", lastDataRow, 12);
-setColumnWidth(ranking, "H", lastDataRow, 36);
-for (const col of ["I", "L", "M", "X", "Y", "Z", "AA", "AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ", "AK", "AL", "AM", "AN", "AO", "AP", "AQ", "AR"]) {
-  setColumnWidth(ranking, col, lastDataRow, 12);
-}
-for (const col of ["J", "K", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "AB"]) {
-  setColumnWidth(ranking, col, lastDataRow, 16);
-}
-setColumnWidth(ranking, "AS", lastDataRow, 18);
+audit.freezePanes.freezeRows(5);
+audit.freezePanes.freezeColumns(3);
+for (const col of ["A", "B", "E", "I", "L", "M", "X", "Y", "Z", "AA", "AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ", "AK", "AL", "AM", "AN", "AO", "AP", "AQ", "AR"]) setColumnWidth(audit, col, Math.max(6, auditLastRow), 12);
+for (const col of ["C", "D", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "AB"]) setColumnWidth(audit, col, Math.max(6, auditLastRow), 16);
+setColumnWidth(audit, "F", Math.max(6, auditLastRow), 12);
+setColumnWidth(audit, "G", Math.max(6, auditLastRow), 12);
+setColumnWidth(audit, "H", Math.max(6, auditLastRow), 36);
+setColumnWidth(audit, "AS", Math.max(6, auditLastRow), 20);
 
 // 儀表板
 titleBand(dashboard, "A1:Q1", "台股防禦型價值篩選儀表板");
@@ -348,25 +406,16 @@ dashboard.getRange("A7").values = [["精華候選（仍需治理、護城河與�
 dashboard.getRange("A7:H7").format = { fill: colors.teal, font: { bold: true, color: colors.white } };
 dashboard.getRange("A8:H8").values = [["排名", "代碼", "公司", "產業", "防禦", "估值", "動能", "總分"]];
 formatHeader(dashboard.getRange("A8:H8"));
-const focusSize = Math.min(config.report.focus_size, meta.hard_pass_count);
-const dashboardFormulaRows = [];
-for (let i = 0; i < config.report.focus_size; i += 1) {
-  const sourceRow = firstDataRow + i;
-  dashboardFormulaRows.push([
-    `=IF('量化排名'!$AR$${sourceRow},'量化排名'!A${sourceRow},"")`,
-    `=IF('量化排名'!$AR$${sourceRow},'量化排名'!B${sourceRow},"")`,
-    `=IF('量化排名'!$AR$${sourceRow},'量化排名'!C${sourceRow},"")`,
-    `=IF('量化排名'!$AR$${sourceRow},'量化排名'!D${sourceRow},"")`,
-    `=IF('量化排名'!$AR$${sourceRow},'量化排名'!AN${sourceRow},"")`,
-    `=IF('量化排名'!$AR$${sourceRow},'量化排名'!AO${sourceRow},"")`,
-    `=IF('量化排名'!$AR$${sourceRow},'量化排名'!AP${sourceRow},"")`,
-    `=IF('量化排名'!$AR$${sourceRow},'量化排名'!AQ${sourceRow},"")`,
+const focusRows = passingRows.slice(0, config.report.focus_size);
+const focusSize = focusRows.length;
+if (focusRows.length) {
+  dashboard.getRange(`A9:H${8 + focusRows.length}`).values = focusRows.map((row) => [
+    row.rank, row.stock_id, row.stock_name, row.industry, row.defense_score, row.valuation_score, row.momentum_score, row.total_score,
   ]);
+  dashboard.getRange(`A9:H${8 + focusRows.length}`).format.font = { color: colors.green, size: 10 };
+  dashboard.getRange(`E9:H${8 + focusRows.length}`).format.numberFormat = "0.0";
+  dashboard.getRange(`A8:H${8 + focusRows.length}`).format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
 }
-dashboard.getRange(`A9:H${8 + config.report.focus_size}`).formulas = dashboardFormulaRows;
-dashboard.getRange(`A9:H${8 + config.report.focus_size}`).format.font = { color: colors.green, size: 10 };
-dashboard.getRange(`E9:H${8 + config.report.focus_size}`).format.numberFormat = "0.0";
-dashboard.getRange(`A8:H${8 + config.report.focus_size}`).format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
 dashboard.getRange("J22:K22").values = [["公司", "總分"]];
 formatHeader(dashboard.getRange("J22:K22"));
 const chartFormulas = [];
@@ -403,7 +452,6 @@ review.getRange("A2").values = [["模型短評由量化欄位自動產生；黃�
 review.getRange("A2").format = { fill: colors.yellow, font: { color: "#7C2D12" }, wrapText: true };
 review.getRange("A5:L5").values = [["排名", "代碼", "公司", "產業", "總分", "治理狀態", "新動能／催化", "人工排除", "複核筆記", "模型短評（自動）", "量化狀態", "質化結論"]];
 formatHeader(review.getRange("A5:L5"));
-const focusRows = results.filter((row) => row.hard_pass).slice(0, config.report.focus_size);
 if (focusRows.length) {
   const reviewValues = focusRows.map((row) => [
     row.rank, row.stock_id, row.stock_name, row.industry, row.total_score, row.governance_status,
@@ -462,13 +510,14 @@ const sourceRows = [
 sources.getRange("A5:F8").values = sourceRows;
 sources.getRange("E5:E8").format.font = { color: colors.red };
 sources.getRange("A4:F8").format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
-sources.getRange("A10:F13").values = [
+sources.getRange("A10:F14").values = [
+  ["完整明細", "screening_results.csv", meta.as_of, "本專案", "", `Excel 主排名只保留硬門檻通過欄位；全市場 45 欄請查 reports/${meta.as_of}/screening_results.csv`],
   ["限制", "上市年資", "", "", "", "以十年前附近有無成交資料近似，不等同正式掛牌日"],
   ["限制", "有息負債", "", "", "", "依XBRL借款、公司債、租賃負債標籤聚合，需定期稽核新標籤"],
   ["限制", "清算價值", "", "", "", "只是折價情境，不是可實現售價或股價保證"],
   ["限制", "治理與題材", "", "", "", "必須以年報、法說及公開資訊人工查證；不由FinMind分數取代"],
 ];
-sources.getRange("A10:F13").format = { fill: colors.lightGray, wrapText: true };
+sources.getRange("A10:F14").format = { fill: colors.lightGray, wrapText: true };
 setColumnWidth(sources, "A", 15, 14);
 setColumnWidth(sources, "B", 15, 40);
 setColumnWidth(sources, "C", 15, 18);
@@ -479,19 +528,18 @@ sources.freezePanes.freezeRows(4);
 
 // 來源註解（原始資料欄位以標題註解指向來源，避免逐列重複長網址）
 workbook.comments.setSelf({ displayName: "pump" });
-workbook.comments.addThread({ cell: ranking.getRange("I5") }, "FM-MKT：價格、市值與估值資料來自 https://finmind.github.io/tutor/TaiwanMarket/Technical/");
-workbook.comments.addThread({ cell: ranking.getRange("N5") }, "FM-FUND：財報與現金流資料來自 https://finmind.github.io/tutor/TaiwanMarket/Fundamental/");
+workbook.comments.addThread({ cell: ranking.getRange("G5") }, "FM-MKT：價格、市值與估值資料來自 https://finmind.github.io/tutor/TaiwanMarket/Technical/");
+workbook.comments.addThread({ cell: ranking.getRange("P5") }, "FM-FUND：財報與月營收資料來自 https://finmind.github.io/tutor/TaiwanMarket/Fundamental/");
 
 // Finance audit: representative workbook formulas must tie to the pipeline.
-const lastPassingIndex = Math.max(0, meta.hard_pass_count - 1);
-for (const index of [0, Math.min(9, lastPassingIndex), Math.min(99, lastPassingIndex), Math.min(199, lastPassingIndex), lastPassingIndex]) {
-  if (index < 0) continue;
-  const rowNumber = firstDataRow + index;
-  const calculated = ranking.getRange(`AN${rowNumber}:AQ${rowNumber}`).values[0];
-  const expected = [results[index].defense_score, results[index].valuation_score, results[index].momentum_score, results[index].total_score];
+for (let index = 0; index < auditRows.length; index += 1) {
+  const rowNumber = auditFirstDataRow + index;
+  const calculated = audit.getRange(`AN${rowNumber}:AQ${rowNumber}`).values[0];
+  const expected = [auditRows[index].defense_score, auditRows[index].valuation_score, auditRows[index].momentum_score, auditRows[index].total_score];
   for (let column = 0; column < 4; column += 1) {
-    if (Math.abs(Number(calculated[column]) - Number(expected[column])) > 0.01) {
-      throw new Error(`Score audit mismatch at ranking row ${rowNumber}, component ${column}`);
+    const actual = Number(calculated[column]);
+    if (!Number.isFinite(actual) || Math.abs(actual - Number(expected[column])) > 0.01) {
+      throw new Error(`Score audit mismatch at audit row ${rowNumber}, component ${column}`);
     }
   }
 }
@@ -509,13 +557,21 @@ const dashboardCheck = await workbook.inspect({
 console.log("[QA] dashboard", dashboardCheck.ndjson);
 const rankingCheck = await workbook.inspect({
   kind: "table",
-  range: `量化排名!A1:AS${Math.min(lastDataRow, 12)}`,
+  range: `量化排名!A1:U${Math.min(rankingLastRow, 12)}`,
   include: "values,formulas",
   tableMaxRows: 12,
-  tableMaxCols: 45,
+  tableMaxCols: 21,
   maxChars: 7000,
 });
 console.log("[QA] ranking", rankingCheck.ndjson);
+const rejectedCheck = await workbook.inspect({
+  kind: "table", range: `未通過明細!A1:F${Math.min(rejectedLastRow, 12)}`, include: "values,formulas", tableMaxRows: 12, tableMaxCols: 6, maxChars: 5000,
+});
+console.log("[QA] rejected", rejectedCheck.ndjson);
+const auditCheck = await workbook.inspect({
+  kind: "table", range: `試算稽核!A1:AS${auditLastRow}`, include: "values,formulas", tableMaxRows: auditLastRow, tableMaxCols: 45, maxChars: 10000,
+});
+console.log("[QA] formula audit", auditCheck.ndjson);
 const explanationCheck = await workbook.inspect({
   kind: "table",
   range: "模型說明!A1:H26",
@@ -548,12 +604,14 @@ await fs.mkdir(qaDir, { recursive: true });
 const renderSpecs = [
   ["儀表板", "A1:Q36", "dashboard.png"],
   ["模型說明", "A1:H26", "model_explanation.png"],
-  ["量化排名", `A1:V${Math.min(lastDataRow, 16)}`, "ranking_left.png"],
-  ["量化排名", `W1:AS${Math.min(lastDataRow, 16)}`, "ranking_right.png"],
+  ["量化排名", `A1:U${Math.min(rankingLastRow, 16)}`, "ranking.png"],
+  ["未通過明細", `A1:F${Math.min(rejectedLastRow, 16)}`, "rejected.png"],
+  ["試算稽核", `A1:V${auditLastRow}`, "audit_left.png"],
+  ["試算稽核", `W1:AS${auditLastRow}`, "audit_right.png"],
   ["人工複核", `A1:L${Math.max(12, 5 + focusSize)}`, "manual_review.png"],
   ["參數", "A1:E47", "assumptions.png"],
   ["檢核", `A1:G${5 + checks.length}`, "checks.png"],
-  ["資料來源", "A1:F13", "sources.png"],
+  ["資料來源", "A1:F14", "sources.png"],
 ];
 for (const [sheetName, range, fileName] of renderSpecs) {
   const preview = await workbook.render({ sheetName, range, scale: 1, format: "png" });

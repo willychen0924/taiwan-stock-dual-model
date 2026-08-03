@@ -33,6 +33,8 @@ const workbook = Workbook.create();
 const dashboard = workbook.worksheets.add("儀表板");
 const explanation = workbook.worksheets.add("模型說明");
 const ranking = workbook.worksheets.add("動能排名");
+const rejected = workbook.worksheets.add("未通過明細");
+const audit = workbook.worksheets.add("試算稽核");
 const review = workbook.worksheets.add("人工複核");
 const assumptions = workbook.worksheets.add("參數");
 const checkSheet = workbook.worksheets.add("檢核");
@@ -53,7 +55,7 @@ const colors = {
   gray: "#64748B",
 };
 
-for (const sheet of [dashboard, explanation, ranking, review, assumptions, checkSheet, sources]) {
+for (const sheet of [dashboard, explanation, ranking, rejected, audit, review, assumptions, checkSheet, sources]) {
   sheet.showGridLines = false;
 }
 
@@ -187,21 +189,99 @@ setColumnWidth(assumptions, "A", 34, 16);
 setColumnWidth(assumptions, "B", 34, 28);
 for (const col of ["C", "D", "E"]) setColumnWidth(assumptions, col, 34, 16);
 
-// 動能排名
-titleBand(ranking, "A1:AG1", "台股全市場高品質營運動能排名");
-ranking.getRange("A2:AG2").merge();
-ranking.getRange("A2").values = [[`市場資料 ${meta.latest_market_date}｜營收期 ${meta.latest_revenue_period}｜財報季 ${meta.latest_financial_quarter}｜排名依本次掃描固定`]];
+// 精簡主排名：只呈現通過硬門檻的公司，分數為本次模型輸出的靜態值。
+const passingRows = results.filter((row) => row.hard_pass);
+const rejectedRows = results.filter((row) => !row.hard_pass);
+titleBand(ranking, "A1:Y1", "台股營運動能排名｜硬門檻通過");
+ranking.getRange("A2:Y2").merge();
+ranking.getRange("A2").values = [[`市場資料 ${meta.latest_market_date}｜營收期 ${meta.latest_revenue_period}｜財報季 ${meta.latest_financial_quarter}｜共 ${passingRows.length} 檔；完整欄位請查 screening_results.csv。`]];
 ranking.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
-const headers = [
+ranking.getRange("A3:Y3").merge();
+ranking.getRange("A3").values = [["本頁為靜態模型結果，不因工作簿參數變動而改寫；公式重算與抽樣驗證請見「試算稽核」。"]];
+ranking.getRange("A3").format = { font: { italic: true, color: colors.gray } };
+const mainHeaders = [
+  "排名", "代碼", "公司", "產業", "漏斗階段", "分類", "治理狀態", "收盤價", "20日均成交額(百萬元)", "PER", "PBR",
+  "近3月營收YoY", "單月營收YoY", "營收加速度", "TTM淨利成長", "營益率年變化", "獲利年數", "正FCF年數",
+  "現金轉換", "負債/資產", "淨現金/市值", "營運動能分", "動能品質分", "估值流動性分", "總分",
+];
+ranking.getRange("A5:Y5").values = [mainHeaders];
+formatHeader(ranking.getRange("A5:Y5"));
+ranking.getRange("A5:Y5").format.rowHeight = 44;
+const mainRows = passingRows.map((row) => [
+  row.rank, row.stock_id, row.stock_name, row.industry, row.funnel_stage, row.momentum_bucket, row.governance_status,
+  row.close, scaled(row.avg_daily_turnover, MILLION), row.per, row.pbr, row.revenue_3m_yoy, row.latest_revenue_yoy,
+  row.revenue_acceleration, row.ttm_net_income_growth, row.ttm_operating_margin_change, row.profitable_years,
+  row.positive_fcf_years, row.cash_conversion, row.liabilities_ratio, row.net_cash_ratio, row.operating_momentum_score,
+  row.quality_score, row.valuation_liquidity_score, row.total_score,
+]);
+const rankingLastRow = 5 + mainRows.length;
+if (mainRows.length) {
+  ranking.getRange(`A6:Y${rankingLastRow}`).values = mainRows;
+  ranking.getRange(`H6:H${rankingLastRow}`).format.numberFormat = "#,##0.00";
+  ranking.getRange(`I6:I${rankingLastRow}`).format.numberFormat = '#,##0"百萬"';
+  ranking.getRange(`J6:K${rankingLastRow}`).format.numberFormat = "0.0x";
+  ranking.getRange(`L6:P${rankingLastRow}`).format.numberFormat = "0.0%";
+  ranking.getRange(`S6:S${rankingLastRow}`).format.numberFormat = "0.00x";
+  ranking.getRange(`T6:U${rankingLastRow}`).format.numberFormat = "0.0%";
+  ranking.getRange(`V6:Y${rankingLastRow}`).format.numberFormat = "0.0";
+  ranking.getRange(`Y6:Y${rankingLastRow}`).conditionalFormats.add("colorScale", {
+    criteria: [
+      { type: "lowestValue", color: "#FEE2E2" },
+      { type: "percentile", value: 50, color: "#FEF3C7" },
+      { type: "highestValue", color: "#DCFCE7" },
+    ],
+  });
+  const table = ranking.tables.add(`A5:Y${rankingLastRow}`, true, "MomentumPassingRankingTable");
+  table.style = "TableStyleMedium4";
+}
+ranking.freezePanes.freezeRows(5);
+ranking.freezePanes.freezeColumns(4);
+const mainWidths = { A: 8, B: 9, C: 15, D: 18, E: 12, F: 13, G: 12, H: 11, I: 18, J: 10, K: 10, L: 14, M: 14, N: 14, O: 15, P: 14, Q: 10, R: 11, S: 12, T: 12, U: 13, V: 13, W: 13, X: 15, Y: 10 };
+for (const [col, width] of Object.entries(mainWidths)) setColumnWidth(ranking, col, Math.max(6, rankingLastRow), width);
+
+titleBand(rejected, "A1:F1", "未通過動能硬門檻明細");
+rejected.getRange("A2:F2").merge();
+rejected.getRange("A2").values = [[`共 ${rejectedRows.length} 檔；完整 33 欄結果保留於 reports/momentum/${meta.as_of}/screening_results.csv。`]];
+rejected.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
+rejected.getRange("A5:F5").values = [["代碼", "公司", "產業", "未通過原因", "缺漏旗標", "總分"]];
+formatHeader(rejected.getRange("A5:F5"));
+const rejectedValues = rejectedRows.map((row) => [row.stock_id, row.stock_name, row.industry, row.exclusion_reasons, row.missing_flags, row.total_score]);
+const rejectedLastRow = 5 + rejectedValues.length;
+if (rejectedValues.length) {
+  rejected.getRange(`A6:F${rejectedLastRow}`).values = rejectedValues;
+  rejected.getRange(`D6:E${rejectedLastRow}`).format.wrapText = true;
+  rejected.getRange(`F6:F${rejectedLastRow}`).format.numberFormat = "0.0";
+  const table = rejected.tables.add(`A5:F${rejectedLastRow}`, true, "MomentumRejectedDetailTable");
+  table.style = "TableStyleMedium4";
+}
+rejected.freezePanes.freezeRows(5);
+for (const [col, width] of Object.entries({ A: 9, B: 15, C: 18, D: 52, E: 24, F: 10 })) setColumnWidth(rejected, col, Math.max(6, rejectedLastRow), width);
+
+const selectedAuditRows = new Map();
+function includeAuditRow(row) {
+  if (row) selectedAuditRows.set(row.stock_id, row);
+}
+for (const rank of [1, 10, 20, 100, 200]) includeAuditRow(passingRows.find((row) => row.rank === rank));
+includeAuditRow(passingRows.at(-1));
+includeAuditRow(rejectedRows[0]);
+includeAuditRow(rejectedRows.find((row) => row.missing_flags));
+includeAuditRow(rejectedRows.find((row) => row.momentum_bucket === "轉機觀察"));
+includeAuditRow(rejectedRows.find((row) => row.momentum_bucket === "前期資料不足"));
+const auditRows = [...selectedAuditRows.values()];
+titleBand(audit, "A1:AG1", "代表性公式試算稽核");
+audit.getRange("A2:AG2").merge();
+audit.getRange("A2").values = [[`抽查 ${auditRows.length} 檔：排名前段／邊界／最後通過者／缺值、轉機與前期資料不足案例；綠字公式須與 Python pipeline 一致。`]];
+audit.getRange("A2").format = { fill: colors.lightBlue, font: { color: colors.gray }, wrapText: true };
+const auditHeaders = [
   "排名", "代碼", "公司", "產業", "市場", "漏斗階段", "治理狀態", "未通過原因", "收盤價", "20日均成交額(百萬元)", "PER", "PBR",
   "近3月營收YoY", "單月營收YoY", "營收加速度", "TTM淨利成長", "TTM營益率", "營益率年變化", "獲利年數", "正FCF年數",
   "現金轉換", "負債/資產", "淨現金/市值", "同業PER分位", "同業PBR分位", "同業營益率分位", "營運動能分", "動能品質分",
   "估值流動性分", "總分", "硬門檻", "缺漏旗標", "模型短評（自動）",
 ];
-ranking.getRange("A5:AG5").values = [headers];
-formatHeader(ranking.getRange("A5:AG5"));
-ranking.getRange("A5:AG5").format.rowHeight = 44;
-const rankingRows = results.map((row) => [
+audit.getRange("A5:AG5").values = [auditHeaders];
+formatHeader(audit.getRange("A5:AG5"));
+audit.getRange("A5:AG5").format.rowHeight = 44;
+const auditValues = auditRows.map((row) => [
   row.rank, row.stock_id, row.stock_name, row.industry, row.market, row.funnel_stage, row.governance_status,
   row.exclusion_reasons, row.close, scaled(row.avg_daily_turnover, MILLION), row.per, row.pbr, row.revenue_3m_yoy, row.latest_revenue_yoy,
   row.revenue_acceleration, row.ttm_net_income_growth, row.ttm_operating_margin, row.ttm_operating_margin_change,
@@ -209,39 +289,40 @@ const rankingRows = results.map((row) => [
   row.sector_per_percentile, row.sector_pbr_percentile, row.sector_margin_percentile, null, null, null, null,
   row.hard_pass, row.missing_flags, row.model_summary,
 ]);
-const firstDataRow = 6;
-const lastDataRow = firstDataRow + rankingRows.length - 1;
-if (rankingRows.length) {
-  ranking.getRange(`A${firstDataRow}:AG${lastDataRow}`).values = rankingRows;
-  const formulaRows = results.map((_, index) => firstDataRow + index);
-  ranking.getRange(`AA${firstDataRow}:AA${lastDataRow}`).formulas = formulaRows.map((r) => [
+const auditFirstDataRow = 6;
+const auditLastRow = 5 + auditValues.length;
+if (auditValues.length) {
+  audit.getRange(`A${auditFirstDataRow}:AG${auditLastRow}`).values = auditValues;
+  const formulaRows = auditRows.map((_, index) => auditFirstDataRow + index);
+  audit.getRange(`AA${auditFirstDataRow}:AA${auditLastRow}`).formulas = formulaRows.map((r) => [
     `=${linearFormula(`M${r}`, 18)}+${linearFormula(`N${r}`, 19)}+${linearFormula(`O${r}`, 20)}+${linearFormula(`P${r}`, 21)}+${linearFormula(`Z${r}`, 22)}+${linearFormula(`R${r}`, 23)}`,
   ]);
-  ranking.getRange(`AB${firstDataRow}:AB${lastDataRow}`).formulas = formulaRows.map((r) => [
+  audit.getRange(`AB${auditFirstDataRow}:AB${auditLastRow}`).formulas = formulaRows.map((r) => [
     `=${linearFormula(`S${r}`, 24)}+${linearFormula(`T${r}`, 25)}+${linearFormula(`U${r}`, 26)}+${descendingFormula(`V${r}`, 27)}+${linearFormula(`W${r}`, 28)}`,
   ]);
-  ranking.getRange(`AC${firstDataRow}:AC${lastDataRow}`).formulas = formulaRows.map((r) => [
+  audit.getRange(`AC${auditFirstDataRow}:AC${auditLastRow}`).formulas = formulaRows.map((r) => [
     `=${descendingFormula(`X${r}`, 29)}+${descendingFormula(`Y${r}`, 30)}+${descendingFormula(`K${r}`, 31)}+${linearFormula(`J${r}*1000000`, 32)}`,
   ]);
-  ranking.getRange(`AD${firstDataRow}:AD${lastDataRow}`).formulas = formulaRows.map((r) => [`=AA${r}+AB${r}+AC${r}`]);
-  ranking.getRange(`I${firstDataRow}:L${lastDataRow}`).format.numberFormat = "#,##0.0";
-  ranking.getRange(`J${firstDataRow}:J${lastDataRow}`).format.numberFormat = '#,##0"百萬"';
-  ranking.getRange(`M${firstDataRow}:R${lastDataRow}`).format.numberFormat = "0.0%";
-  ranking.getRange(`U${firstDataRow}:U${lastDataRow}`).format.numberFormat = "0.00x";
-  ranking.getRange(`V${firstDataRow}:Z${lastDataRow}`).format.numberFormat = "0.0%";
-  ranking.getRange(`AA${firstDataRow}:AD${lastDataRow}`).format.numberFormat = "0.0";
-  ranking.getRange(`AA${firstDataRow}:AD${lastDataRow}`).format.font = { color: colors.green };
-  ranking.getRange(`AG${firstDataRow}:AG${lastDataRow}`).format = { wrapText: false, verticalAlignment: "center" };
-  ranking.getRange(`A5:AG${lastDataRow}`).format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
+  audit.getRange(`AD${auditFirstDataRow}:AD${auditLastRow}`).formulas = formulaRows.map((r) => [`=AA${r}+AB${r}+AC${r}`]);
+  audit.getRange(`I${auditFirstDataRow}:L${auditLastRow}`).format.numberFormat = "#,##0.0";
+  audit.getRange(`J${auditFirstDataRow}:J${auditLastRow}`).format.numberFormat = '#,##0"百萬"';
+  audit.getRange(`M${auditFirstDataRow}:R${auditLastRow}`).format.numberFormat = "0.0%";
+  audit.getRange(`U${auditFirstDataRow}:U${auditLastRow}`).format.numberFormat = "0.00x";
+  audit.getRange(`V${auditFirstDataRow}:Z${auditLastRow}`).format.numberFormat = "0.0%";
+  audit.getRange(`AA${auditFirstDataRow}:AD${auditLastRow}`).format.numberFormat = "0.0";
+  audit.getRange(`AA${auditFirstDataRow}:AD${auditLastRow}`).format.font = { color: colors.green };
+  audit.getRange(`AG${auditFirstDataRow}:AG${auditLastRow}`).format = { wrapText: true, verticalAlignment: "center" };
+  const table = audit.tables.add(`A5:AG${auditLastRow}`, true, "MomentumFormulaAuditTable");
+  table.style = "TableStyleMedium4";
 }
-ranking.freezePanes.freezeRows(5);
-ranking.freezePanes.freezeColumns(4);
-const rankingWidths = {
-  A: 8, B: 9, C: 15, D: 16, E: 9, F: 12, G: 12, H: 30, I: 11, J: 17, K: 10, L: 10,
+audit.freezePanes.freezeRows(5);
+audit.freezePanes.freezeColumns(4);
+const auditWidths = {
+  A: 8, B: 9, C: 15, D: 18, E: 9, F: 13, G: 12, H: 40, I: 11, J: 18, K: 10, L: 10,
   M: 14, N: 14, O: 14, P: 15, Q: 13, R: 14, S: 10, T: 11, U: 12, V: 12, W: 13, X: 12, Y: 12,
   Z: 14, AA: 13, AB: 13, AC: 15, AD: 10, AE: 10, AF: 20, AG: 54,
 };
-for (const [col, width] of Object.entries(rankingWidths)) setColumnWidth(ranking, col, lastDataRow, width);
+for (const [col, width] of Object.entries(auditWidths)) setColumnWidth(audit, col, Math.max(6, auditLastRow), width);
 
 // 儀表板
 titleBand(dashboard, "A1:Q1", "台股高品質營運動能篩選儀表板");
@@ -265,13 +346,12 @@ dashboard.getRange("A7").values = [["營運動能精華候選（仍需成長來�
 dashboard.getRange("A7:H7").format = { fill: colors.green, font: { bold: true, color: colors.white } };
 dashboard.getRange("A8:H8").values = [["排名", "代碼", "公司", "產業", "動能", "品質", "估值流動性", "總分"]];
 formatHeader(dashboard.getRange("A8:H8"));
-const focusRows = results.filter((row) => row.hard_pass).slice(0, config.report.focus_size);
+const focusRows = passingRows.slice(0, config.report.focus_size);
 if (focusRows.length) {
-  dashboard.getRange(`A9:D${8 + focusRows.length}`).values = focusRows.map((row) => [row.rank, row.stock_id, row.stock_name, row.industry]);
-  dashboard.getRange(`E9:H${8 + focusRows.length}`).formulas = focusRows.map((_, index) => {
-    const sourceRow = 6 + index;
-    return [`='動能排名'!AA${sourceRow}`, `='動能排名'!AB${sourceRow}`, `='動能排名'!AC${sourceRow}`, `='動能排名'!AD${sourceRow}`];
-  });
+  dashboard.getRange(`A9:H${8 + focusRows.length}`).values = focusRows.map((row) => [
+    row.rank, row.stock_id, row.stock_name, row.industry, row.operating_momentum_score, row.quality_score,
+    row.valuation_liquidity_score, row.total_score,
+  ]);
   dashboard.getRange(`E9:H${8 + focusRows.length}`).format.numberFormat = "0.0";
   dashboard.getRange(`A8:H${8 + focusRows.length}`).format.borders = { preset: "outside", style: "thin", color: "#CBD5E1" };
 }
@@ -358,7 +438,8 @@ sources.getRange("A5:F8").values = [
   ["FM-REV", "TaiwanStockMonthRevenue", meta.latest_revenue_period, "FinMind", "https://finmind.github.io/tutor/TaiwanMarket/Fundamental/", "近月營收年增與前後三月動能差"],
   ["MODEL", "高品質營運動能模型", meta.as_of, "本專案", "", "營運60／品質25／估值流動性15；不構成投資建議"],
 ];
-sources.getRange("A10:F13").values = [
+sources.getRange("A10:F14").values = [
+  ["完整明細", "screening_results.csv", meta.as_of, "本專案", "", `Excel 主排名只保留硬門檻通過欄位；全市場 33 欄請查 reports/momentum/${meta.as_of}/screening_results.csv`],
   ["限制", "低基期與轉盈", "", "", "", "前期淨利非正者不與一般成長公司混合排名"],
   ["限制", "月營收", "", "", "", "月營收不等於獲利；須搭配營益率與現金流"],
   ["限制", "資料時點", "", "", "", "市場每日、營收每月、財報每季更新，頻率不同"],
@@ -374,24 +455,23 @@ setColumnWidth(sources, "F", 14, 52);
 sources.freezePanes.freezeRows(4);
 
 workbook.comments.setSelf({ displayName: "pump" });
-workbook.comments.addThread({ cell: ranking.getRange("I5") }, "市場資料來源：https://finmind.github.io/tutor/TaiwanMarket/Technical/");
-workbook.comments.addThread({ cell: ranking.getRange("M5") }, "營收與財報資料來源：https://finmind.github.io/tutor/TaiwanMarket/Fundamental/");
+workbook.comments.addThread({ cell: ranking.getRange("H5") }, "市場資料來源：https://finmind.github.io/tutor/TaiwanMarket/Technical/");
+workbook.comments.addThread({ cell: ranking.getRange("L5") }, "營收與財報資料來源：https://finmind.github.io/tutor/TaiwanMarket/Fundamental/");
 
 // 代表性分數需與Python模型一致。
-const lastPassingIndex = Math.max(0, meta.hard_pass_count - 1);
-for (const index of [0, Math.min(9, lastPassingIndex), Math.min(99, lastPassingIndex), lastPassingIndex]) {
-  const rowNumber = firstDataRow + index;
-  const calculated = ranking.getRange(`AA${rowNumber}:AD${rowNumber}`).values[0];
+for (let index = 0; index < auditRows.length; index += 1) {
+  const rowNumber = auditFirstDataRow + index;
+  const calculated = audit.getRange(`AA${rowNumber}:AD${rowNumber}`).values[0];
   const expected = [
-    results[index].operating_momentum_score,
-    results[index].quality_score,
-    results[index].valuation_liquidity_score,
-    results[index].total_score,
+    auditRows[index].operating_momentum_score,
+    auditRows[index].quality_score,
+    auditRows[index].valuation_liquidity_score,
+    auditRows[index].total_score,
   ];
   for (let column = 0; column < 4; column += 1) {
     const actual = Number(calculated[column]);
     if (!Number.isFinite(actual) || Math.abs(actual - Number(expected[column])) > 0.01) {
-      throw new Error(`Momentum score audit mismatch at row ${rowNumber}, component ${column}`);
+      throw new Error(`Momentum score audit mismatch at audit row ${rowNumber}, component ${column}`);
     }
   }
 }
@@ -406,9 +486,17 @@ const explanationCheck = await workbook.inspect({
 });
 console.log("[QA] momentum explanation", explanationCheck.ndjson);
 const rankingCheck = await workbook.inspect({
-  kind: "table", range: `動能排名!A1:AG${Math.min(lastDataRow, 12)}`, include: "values,formulas", tableMaxRows: 12, tableMaxCols: 33, maxChars: 9000,
+  kind: "table", range: `動能排名!A1:Y${Math.min(rankingLastRow, 12)}`, include: "values,formulas", tableMaxRows: 12, tableMaxCols: 25, maxChars: 9000,
 });
 console.log("[QA] momentum ranking", rankingCheck.ndjson);
+const rejectedCheck = await workbook.inspect({
+  kind: "table", range: `未通過明細!A1:F${Math.min(rejectedLastRow, 12)}`, include: "values,formulas", tableMaxRows: 12, tableMaxCols: 6, maxChars: 5000,
+});
+console.log("[QA] momentum rejected", rejectedCheck.ndjson);
+const auditCheck = await workbook.inspect({
+  kind: "table", range: `試算稽核!A1:AG${auditLastRow}`, include: "values,formulas", tableMaxRows: auditLastRow, tableMaxCols: 33, maxChars: 10000,
+});
+console.log("[QA] momentum formula audit", auditCheck.ndjson);
 const reviewCheck = await workbook.inspect({
   kind: "table", range: `人工複核!A1:L${Math.min(5 + focusRows.length, 12)}`, include: "values,formulas", tableMaxRows: 12, tableMaxCols: 12, maxChars: 7000,
 });
@@ -423,12 +511,14 @@ await fs.mkdir(qaDir, { recursive: true });
 const renderSpecs = [
   ["儀表板", "A1:Q34", "dashboard.png"],
   ["模型說明", "A1:H28", "model_explanation.png"],
-  ["動能排名", `A1:R${Math.min(lastDataRow, 16)}`, "ranking_left.png"],
-  ["動能排名", `S1:AG${Math.min(lastDataRow, 16)}`, "ranking_right.png"],
+  ["動能排名", `A1:Y${Math.min(rankingLastRow, 16)}`, "ranking.png"],
+  ["未通過明細", `A1:F${Math.min(rejectedLastRow, 16)}`, "rejected.png"],
+  ["試算稽核", `A1:R${auditLastRow}`, "audit_left.png"],
+  ["試算稽核", `S1:AG${auditLastRow}`, "audit_right.png"],
   ["人工複核", `A1:L${Math.max(12, 5 + focusRows.length)}`, "manual_review.png"],
   ["參數", "A1:E34", "assumptions.png"],
   ["檢核", `A1:G${5 + checks.length}`, "checks.png"],
-  ["資料來源", "A1:F13", "sources.png"],
+  ["資料來源", "A1:F14", "sources.png"],
 ];
 for (const [sheetName, range, fileName] of renderSpecs) {
   const preview = await workbook.render({ sheetName, range, scale: 1, format: "png" });
