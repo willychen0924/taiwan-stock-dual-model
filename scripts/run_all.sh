@@ -17,6 +17,8 @@ NODE_BIN="${NODE_BIN:-$DEFAULT_NODE}"
 cd "$ROOT"
 "$PYTHON_BIN" scripts/run_screen.py --as-of "$AS_OF" "$@"
 "$PYTHON_BIN" scripts/update_rankings_history.py
+"$PYTHON_BIN" scripts/build_weekly_report.py --as-of "$AS_OF"
+"$PYTHON_BIN" scripts/build_portal.py
 
 EXCEL_AVAILABLE=1
 if ! "$NODE_BIN" --version >/dev/null 2>&1; then
@@ -36,7 +38,7 @@ if (( EXCEL_AVAILABLE )); then
     "outputs/${AS_OF}/台股營運動能篩選_${AS_OF}.xlsx"
 fi
 
-"$PYTHON_BIN" scripts/cleanup_old_reports.py --as-of "$AS_OF" --keep-days 7
+"$PYTHON_BIN" scripts/cleanup_old_reports.py --as-of "$AS_OF"
 
 print "完成：reports/latest 與 reports/momentum/latest 的 JSON、CSV、HTML"
 if (( EXCEL_AVAILABLE )); then

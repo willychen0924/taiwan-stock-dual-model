@@ -46,6 +46,8 @@ zsh scripts/run_all.sh
 
 每日完整流程會同時產出 `台股防禦價值篩選_日期.xlsx` 與 `台股營運動能篩選_日期.xlsx`，兩份 Excel 都包含「模型說明」工作表。
 
+日報入口為 `reports/latest/index.html`；週報入口為 `reports/weekly/latest/index.html`。週報只使用排名歷史中的有效觀測，並自動切開模型版本。月報需先通過 `scripts/check_monthly_readiness.py` 的資料量與同版本門檻，目前不會以不足資料產生。
+
 重新下載歷史快取可加上 `--force`。日常執行不需要重抓已封存季度資料。
 
 ## 人工複核

@@ -54,6 +54,10 @@ class CombinedReportTests(unittest.TestCase):
         self.assertIn("共 1 檔", page)
         self.assertIn("2330", page)
         self.assertIn("sortable-table", page)
+        self.assertIn('role="tablist"', page)
+        self.assertIn('id="status-value"', page)
+        self.assertIn('id="status-momentum"', page)
+        self.assertIn("量化排序不是買進建議", page)
 
     def test_invalid_model_suppresses_intersection(self) -> None:
         page = build_combined_html(
@@ -62,6 +66,16 @@ class CombinedReportTests(unittest.TestCase):
         )
         self.assertIn("本次不產生雙模型交集", page)
         self.assertIn("資料不可比", page)
+
+    def test_weekly_navigation_is_enabled_only_when_available(self) -> None:
+        disabled = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        enabled = build_combined_html(
+            _result("defensive_value"),
+            _result("operating_momentum"),
+            weekly_available=True,
+        )
+        self.assertNotIn('href="../weekly/latest/index.html"', disabled)
+        self.assertIn('href="../weekly/latest/index.html"', enabled)
 
 
 if __name__ == "__main__":

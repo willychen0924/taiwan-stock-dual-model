@@ -270,6 +270,34 @@ def score_composition_bar(segments: list[tuple[str, float | None, str]]) -> str:
     )
 
 
+def period_navigation(
+    active: str,
+    *,
+    daily_href: str,
+    weekly_href: str | None,
+    monthly_href: str | None,
+) -> str:
+    items = []
+    for key, label, href in [
+        ("daily", "日報", daily_href),
+        ("weekly", "週報", weekly_href),
+        ("monthly", "月報", monthly_href),
+    ]:
+        classes = ["period-link"]
+        if key == active:
+            classes.append("active")
+        if href is None:
+            classes.append("disabled")
+            items.append(f'<span class="{" ".join(classes)}" title="資料尚未足夠">{label}</span>')
+        else:
+            current_attribute = ' aria-current="page"' if key == active else ""
+            items.append(
+                f'<a class="{" ".join(classes)}" href="{html.escape(href, quote=True)}"'
+                f'{current_attribute}>{label}</a>'
+            )
+    return f'<nav class="period-nav" aria-label="報表期間">{"".join(items)}</nav>'
+
+
 def monitor_report_css() -> str:
     """Shared Version-A visual system for all standalone HTML reports."""
     return """
@@ -312,6 +340,14 @@ padding:8px 0 12px;font-size:12.5px;white-space:normal;line-height:1.55}.researc
 .rank-cell{color:#94a3b8;width:46px}.stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#0369a1}.industry{color:#94a3b8;font-size:12.5px}
 .period-note{display:block;color:#94a3b8;font-size:10.5px;margin-top:2px}.volume{color:#64748b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .empty{color:var(--muted)}.copy{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;line-height:1.8;color:#40564f}.copy h3{color:var(--third);margin-bottom:6px}
+.period-nav{margin-left:auto;display:flex;gap:2px;background:#e2e8f0;padding:2px;border-radius:8px}
+.period-link{padding:5px 13px;border-radius:6px;font-size:12.5px;text-decoration:none;color:#64748b}
+.period-link.active{background:#fff;color:var(--navy);font-weight:650;box-shadow:0 1px 2px #0f172a14}
+.period-link.disabled{color:#aebdce;cursor:not-allowed}.report-tabs{display:flex;gap:4px;margin:16px 0 0;border-bottom:2px solid #e2e8f0}
+.report-tabs button{background:none;border:0;padding:10px 18px 11px;font:600 13.5px inherit;cursor:pointer;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-2px}
+.report-tabs button[aria-selected="true"]{color:var(--navy);border-bottom-color:var(--navy)}.report-tabs .count{display:inline-block;margin-left:7px;background:#e2e8f0;color:#64748b;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700}
+.report-tabs button[aria-selected="true"] .count{background:var(--navy);color:#fff}.tab-panel{padding-top:16px}.tab-panel+.tab-panel{border-top:1px solid var(--line);margin-top:22px}
+.js .tab-panel[hidden],.js .model-status[hidden]{display:none}.js .tab-panel+.tab-panel{border-top:0;margin-top:0}
 @media(max-width:980px){.wrap{padding:12px}.hero{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}.research-grid{grid-template-columns:1fr}}
 """
 

@@ -72,6 +72,8 @@ def main() -> int:
         momentum_result,
         ROOT / "reports",
         enrichment=enrichment,
+        history_path=history_path,
+        weekly_available=(ROOT / "reports" / "weekly" / "latest" / "index.html").exists(),
     )
     for name, path in combined_paths.items():
         print(f"[輸出] combined_{name}: {path}", flush=True)

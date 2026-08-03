@@ -8,62 +8,15 @@ from typing import Any
 from .report_common import (
     build_monitor_status,
     current_report_comparability,
+    load_rank_comparison,
     monitor_report_css,
-    score_composition_bar,
+    period_navigation,
+    rank_comparison_note,
     sortable_cell,
     sortable_table_script,
 )
-
-
-def _focus(result: dict[str, Any]) -> list[dict[str, Any]]:
-    size = int(result["config"]["report"]["focus_size"])
-    return [row for row in result["results"] if row.get("hard_pass")][:size]
-
-
-def _model_table(
-    rows: list[dict[str, Any]],
-    *,
-    model_id: str,
-    enrichment: dict[str, dict[str, str]],
-) -> str:
-    body: list[str] = []
-    for row in rows:
-        stock_id = str(row["stock_id"])
-        extra = enrichment.get(stock_id, {})
-        if model_id == "operating_momentum":
-            segments = [
-                ("營運動能", row.get("operating_momentum_score"), "score-operating"),
-                ("動能品質", row.get("quality_score"), "score-quality"),
-                ("估值流動性", row.get("valuation_liquidity_score"), "score-momentum-valuation"),
-            ]
-        else:
-            segments = [
-                ("防禦", row.get("defense_score"), "score-defense"),
-                ("估值", row.get("valuation_score"), "score-valuation"),
-                ("動能", row.get("momentum_score"), "score-momentum"),
-            ]
-        row_id = f"{model_id}-{stock_id}"
-        body.append(f'<tr data-row-id="{html.escape(row_id, quote=True)}">' + "".join([
-            sortable_cell(str(row["rank"]), row["rank"], css_class="rank-cell"),
-            sortable_cell(f"<strong>{html.escape(stock_id)}</strong>", stock_id, css_class="stock-id"),
-            sortable_cell(html.escape(str(row.get("stock_name") or "")), row.get("stock_name")),
-            sortable_cell(html.escape(str(row.get("industry") or "")), row.get("industry"), css_class="industry"),
-            sortable_cell(score_composition_bar(segments), row.get("total_score"), css_class="composition"),
-            sortable_cell(f"{float(row.get('total_score') or 0):.1f}", row.get("total_score"), css_class="total"),
-        ]) + "</tr>" + (
-            f'<tr class="row-detail" data-detail-for="{html.escape(row_id, quote=True)}"><td colspan="6">'
-            '<details><summary>技術面與籌碼面</summary><div class="research-grid">'
-            f'<div><b>技術面</b><br>{html.escape(extra.get("technical", "—"))}</div>'
-            f'<div><b>籌碼面</b><br>{html.escape(extra.get("chip", "—"))}</div>'
-            '<div><b>定位</b><br>外部研究資訊，不進入模型分數、硬門檻或排名。</div>'
-            '</div></details></td></tr>'
-        ))
-    headers = [
-        ("排名", "number"), ("代碼", "text"), ("公司", "text"), ("產業", "text"),
-        ("分數組成", "number"), ("總分", "number"),
-    ]
-    head = "".join(f'<th data-type="{kind}">{html.escape(label)}</th>' for label, kind in headers)
-    return f'<div class="tablewrap"><table class="sortable-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
+from .momentum_report import _momentum_table
+from .report import _value_table
 
 
 def build_combined_html(
@@ -71,12 +24,20 @@ def build_combined_html(
     momentum_result: dict[str, Any],
     *,
     enrichment: dict[str, dict[str, str]] | None = None,
+    history_path: Path | None = None,
+    weekly_available: bool = False,
 ) -> str:
     enrichment = enrichment or {}
     value_meta = value_result["metadata"]
     momentum_meta = momentum_result["metadata"]
-    value_focus = _focus(value_result)
-    momentum_focus = _focus(momentum_result)
+    value_passing = [row for row in value_result["results"] if row.get("hard_pass")]
+    momentum_passing = [row for row in momentum_result["results"] if row.get("hard_pass")]
+    value_focus_size = int(value_result["config"]["report"]["focus_size"])
+    momentum_focus_size = int(momentum_result["config"]["report"]["focus_size"])
+    value_watch_size = int(value_result["config"]["report"].get("watchlist_size", 100))
+    momentum_watch_size = int(momentum_result["config"]["report"].get("watchlist_size", 100))
+    value_focus = value_passing[:value_focus_size]
+    momentum_focus = momentum_passing[:momentum_focus_size]
     value_ok, value_reason = current_report_comparability(value_result)
     momentum_ok, momentum_reason = current_report_comparability(momentum_result)
     same_market_date = value_meta.get("latest_market_date") == momentum_meta.get("latest_market_date")
@@ -90,6 +51,7 @@ def build_combined_html(
             "<tr>" + "".join([
                 sortable_cell(html.escape(stock_id), stock_id),
                 sortable_cell(html.escape(str(value_by_id[stock_id].get("stock_name") or "")), value_by_id[stock_id].get("stock_name")),
+                sortable_cell(html.escape(str(value_by_id[stock_id].get("industry") or "")), value_by_id[stock_id].get("industry")),
                 sortable_cell(str(value_by_id[stock_id]["rank"]), value_by_id[stock_id]["rank"]),
                 sortable_cell(str(momentum_by_id[stock_id]["rank"]), momentum_by_id[stock_id]["rank"]),
                 sortable_cell(f"{float(value_by_id[stock_id].get('total_score') or 0):.1f}", value_by_id[stock_id].get("total_score")),
@@ -99,7 +61,7 @@ def build_combined_html(
         )
         if intersection_rows:
             intersection = (
-                '<div class="tablewrap"><table class="sortable-table"><thead><tr><th data-type="text">代碼</th><th data-type="text">公司</th>'
+                '<div class="tablewrap"><table class="sortable-table"><thead><tr><th data-type="text">代碼</th><th data-type="text">公司</th><th data-type="text">產業</th>'
                 '<th data-type="number">價值排名</th><th data-type="number">動能排名</th>'
                 '<th data-type="number">價值總分</th><th data-type="number">動能總分</th></tr></thead>'
                 f"<tbody>{intersection_rows}</tbody></table></div>"
@@ -141,18 +103,48 @@ def build_combined_html(
         ],
         extra_summary="營運動能",
     )
+    value_comparison = load_rank_comparison(value_result, history_path)
+    momentum_comparison = load_rank_comparison(momentum_result, history_path)
+    value_focus_table = _value_table(value_focus, value_comparison, enrichment)
+    value_remainder = value_passing[value_focus_size:value_watch_size]
+    momentum_focus_table = _momentum_table(momentum_focus, momentum_comparison, enrichment)
+    momentum_remainder = momentum_passing[momentum_focus_size:momentum_watch_size]
+    value_remainder_table = _value_table(value_remainder, value_comparison, enrichment)
+    momentum_remainder_table = _momentum_table(momentum_remainder, momentum_comparison, enrichment)
+    statuses = [str(value_meta.get("model_status") or "UNKNOWN"), str(momentum_meta.get("model_status") or "UNKNOWN")]
+    overall_status = "FAIL" if "FAIL" in statuses else "WARN" if any(status != "OK" for status in statuses) else "OK"
+    navigation = period_navigation(
+        "daily",
+        daily_href="index.html",
+        weekly_href="../weekly/latest/index.html" if weekly_available else None,
+        monthly_href=None,
+    )
     sortable_script = sortable_table_script()
     return f"""<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>台股雙模型研究報告｜{html.escape(str(value_meta.get('as_of') or ''))}</title>
-<style>{monitor_report_css()}</style></head><body><div class="wrap">
-<div class="hero"><div><h1>台股雙模型監控台</h1><p>報表日 {html.escape(str(value_meta.get('as_of') or ''))}　·　市場日 {html.escape(str(value_meta.get('latest_market_date') or ''))}　·　排名只用於研究排序，不是買進建議</p></div><div class="hero-status">交集 {html.escape(str(intersection_count))}</div></div>
-<div class="grid">{value_status}{momentum_status}</div>
-<div class="panel"><h2>雙模型交集</h2><p class="note">{html.escape(intersection_note)}</p>{intersection}</div>
-<div class="grid"><section class="panel"><div class="panel-head"><h2>防禦價值精華20</h2><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{_model_table(value_focus, model_id='defensive_value', enrichment=enrichment)}</section>
-<section class="panel"><div class="panel-head"><h2>營運動能精華20</h2><div class="legend"><span class="key-dot key-first"></span>營運動能　<span class="key-dot key-second"></span>品質　<span class="key-dot key-third"></span>估值流動性</div></div>{_model_table(momentum_focus, model_id='operating_momentum', enrichment=enrichment)}</section></div>
-<p class="note">技術面與籌碼面僅為外部呈現欄位，不進入分數、硬門檻、模型狀態或排名歷史。</p>
-{sortable_script}</div></body></html>"""
+<title>台股雙模型監控台｜{html.escape(str(value_meta.get('as_of') or ''))}</title>
+<script>document.documentElement.classList.add('js')</script><style>{monitor_report_css()}</style></head><body><div class="wrap">
+<div class="hero"><div><h1>台股雙模型監控台</h1><p>報表日 {html.escape(str(value_meta.get('as_of') or ''))}　·　市場日 {html.escape(str(value_meta.get('latest_market_date') or ''))}　·　排名只用於研究排序，不是買進建議</p></div><div class="hero-status {overall_status.lower()}">{overall_status}</div>{navigation}</div>
+<div id="status-value" class="model-status">{value_status}</div><div id="status-momentum" class="model-status">{momentum_status}</div>
+<div class="report-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" data-tab="intersection">雙模型交集<span class="count">{html.escape(str(intersection_count))}</span></button><button type="button" role="tab" aria-selected="false" data-tab="value">防禦價值</button><button type="button" role="tab" aria-selected="false" data-tab="momentum">營運動能</button></div>
+<section class="tab-panel" id="tab-intersection"><div class="panel-head"><div><h2>雙模型交集</h2><p class="note">{html.escape(intersection_note)} 交集只表示兩套獨立條件同時成立。</p></div></div>{intersection}</section>
+<section class="tab-panel" id="tab-value"><div class="panel-head"><div><h2>防禦價值</h2><p class="note">{rank_comparison_note(value_comparison)}</p></div><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{value_focus_table}<details class="watchlist"><summary>展開自選100第 21–100 名（{len(value_remainder)} 檔）</summary>{value_remainder_table}</details></section>
+<section class="tab-panel" id="tab-momentum"><div class="panel-head"><div><h2>營運動能</h2><p class="note">{rank_comparison_note(momentum_comparison)}</p></div><div class="legend"><span class="key-dot key-first"></span>營運動能　<span class="key-dot key-second"></span>品質　<span class="key-dot key-third"></span>估值流動性</div></div>{momentum_focus_table}<details class="watchlist"><summary>展開觀察前100第 21–100 名（{len(momentum_remainder)} 檔）</summary>{momentum_remainder_table}</details></section>
+<p class="note">技術面與籌碼面僅為外部呈現欄位，不進入分數、硬門檻、模型狀態或排名歷史。量化排序不是買進建議。</p>
+{sortable_script}<script>
+const tabs = Array.from(document.querySelectorAll('.report-tabs button'));
+const panels = Array.from(document.querySelectorAll('.tab-panel'));
+const valueStatus = document.getElementById('status-value');
+const momentumStatus = document.getElementById('status-momentum');
+function selectTab(key) {{
+  tabs.forEach((button) => button.setAttribute('aria-selected', String(button.dataset.tab === key)));
+  panels.forEach((panel) => {{ panel.hidden = panel.id !== `tab-${{key}}`; }});
+  valueStatus.hidden = key === 'momentum';
+  momentumStatus.hidden = key === 'value';
+}}
+tabs.forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tab)));
+selectTab('intersection');
+</script></div></body></html>"""
 
 
 def write_combined_report(
@@ -161,6 +153,8 @@ def write_combined_report(
     reports_root: Path,
     *,
     enrichment: dict[str, dict[str, str]] | None = None,
+    history_path: Path | None = None,
+    weekly_available: bool = False,
 ) -> dict[str, Path]:
     as_of = str(value_result["metadata"]["as_of"])
     dated_dir = reports_root / as_of
@@ -169,9 +163,17 @@ def write_combined_report(
     latest_dir.mkdir(parents=True, exist_ok=True)
     dated_path = dated_dir / "combined_report.html"
     latest_path = latest_dir / "combined_report.html"
-    dated_path.write_text(
-        build_combined_html(value_result, momentum_result, enrichment=enrichment),
-        encoding="utf-8",
+    index_path = dated_dir / "index.html"
+    latest_index_path = latest_dir / "index.html"
+    page = build_combined_html(
+        value_result,
+        momentum_result,
+        enrichment=enrichment,
+        history_path=history_path,
+        weekly_available=weekly_available,
     )
+    dated_path.write_text(page, encoding="utf-8")
+    index_path.write_text(page, encoding="utf-8")
     shutil.copy2(dated_path, latest_path)
-    return {"html": dated_path, "latest_html": latest_path}
+    shutil.copy2(index_path, latest_index_path)
+    return {"html": dated_path, "latest_html": latest_path, "index_html": index_path, "latest_index_html": latest_index_path}
