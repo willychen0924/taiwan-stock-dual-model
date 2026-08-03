@@ -14,6 +14,7 @@ const { metadata: meta, config, checks, results } = payload;
 const enrichment = await loadEnrichment(root, meta.as_of);
 const MILLION = 1_000_000;
 const HUNDRED_MILLION = 100_000_000;
+const THOUSAND = 1_000;
 
 function scaled(value, divisor) {
   return value == null ? null : Number(value) / divisor;
@@ -106,7 +107,7 @@ explanation.getRange("A3:H3").merge();
 explanation.getRange("A3").values = [["核心概念"]];
 explanation.getRange("A3:H3").format = { fill: colors.teal, font: { bold: true, color: colors.white, size: 12 } };
 explanation.getRange("A4:H8").merge();
-explanation.getRange("A4").values = [["這套模型不是直接挑選最便宜的股票，而是先排除明顯風險，再比較財務體質、估值與營運動能。模型先以獲利、現金流、負債與成交量建立安全底線，再從防禦能力、估值合理性及營運動能三方面評分。\n\n量化排名只用來縮小研究範圍，不代表預期報酬或買進建議；公司治理、競爭優勢與新動能仍須透過年報、法說及公開資訊查證。Excel 顯示單位：市值為億元，成交額及資產負債金額為百萬元。"]];
+explanation.getRange("A4").values = [["這套模型不是直接挑選最便宜的股票，而是先排除明顯風險，再比較財務體質、估值與營運動能。模型先以獲利、現金流、負債與成交量建立安全底線，再從防禦能力、估值合理性及營運動能三方面評分。\n\n量化排名只用來縮小研究範圍，不代表預期報酬或買進建議；公司治理、競爭優勢與新動能仍須透過年報、法說及公開資訊查證。Excel 主排名的20日均量以張顯示；硬門檻與試算稽核仍使用20日均成交額。市值為億元，成交額及資產負債金額為百萬元。"]];
 explanation.getRange("A4:H8").format = { fill: colors.lightBlue, font: { color: colors.black, size: 11 }, wrapText: true, verticalAlignment: "center" };
 explanation.getRange("A10:H10").merge();
 explanation.getRange("A10").values = [["篩選流程"]];
@@ -234,7 +235,7 @@ ranking.getRange("A3:U3").merge();
 ranking.getRange("A3").values = [["本頁為靜態模型結果，不因工作簿參數變動而改寫；公式重算與抽樣驗證請見「試算稽核」。"]];
 ranking.getRange("A3").format = { font: { italic: true, color: colors.gray } };
 const mainHeaders = [
-  "排名", "代碼", "公司", "產業", "漏斗階段", "治理狀態", "收盤價", "市值(億元)", "20日均成交額(百萬元)",
+  "排名", "代碼", "公司", "產業", "漏斗階段", "治理狀態", "收盤價", "市值(億元)", "20日均量(張)",
   "本益比", "本淨比", "淨現金/市值", "流動比率", "負債/資產", "清算覆蓋", "近3月營收YoY", "TTM淨利成長",
   "防禦分", "估值分", "動能分", "總分",
 ];
@@ -243,7 +244,7 @@ formatHeader(ranking.getRange("A5:U5"));
 ranking.getRange("A5:U5").format.rowHeight = 44;
 const mainRows = passingRows.map((row) => [
   row.rank, row.stock_id, row.stock_name, row.industry, row.funnel_stage, row.governance_status, row.close,
-  scaled(row.market_value, HUNDRED_MILLION), scaled(row.avg_daily_turnover, MILLION), row.per, row.pbr,
+  scaled(row.market_value, HUNDRED_MILLION), scaled(row.avg_daily_volume, THOUSAND), row.per, row.pbr,
   row.net_cash_ratio, row.current_ratio, row.liabilities_ratio, row.liquidation_coverage, row.revenue_3m_yoy,
   row.ttm_net_income_growth, row.defense_score, row.valuation_score, row.momentum_score, row.total_score,
 ]);
@@ -252,7 +253,7 @@ if (mainRows.length) {
   ranking.getRange(`A6:U${rankingLastRow}`).values = mainRows;
   ranking.getRange(`G6:G${rankingLastRow}`).format.numberFormat = "#,##0.00;[Red](#,##0.00);-";
   ranking.getRange(`H6:H${rankingLastRow}`).format.numberFormat = '#,##0.0"億";[Red](#,##0.0"億");-';
-  ranking.getRange(`I6:I${rankingLastRow}`).format.numberFormat = '#,##0"百萬";[Red](#,##0"百萬");-';
+  ranking.getRange(`I6:I${rankingLastRow}`).format.numberFormat = '#,##0"張";[Red](#,##0"張");-';
   ranking.getRange(`J6:K${rankingLastRow}`).format.numberFormat = "0.0x;[Red](0.0x);-";
   ranking.getRange(`L6:L${rankingLastRow}`).format.numberFormat = "0.0%;[Red](0.0%);-";
   ranking.getRange(`M6:M${rankingLastRow}`).format.numberFormat = "0.00x;[Red](0.00x);-";

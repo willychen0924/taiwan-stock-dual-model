@@ -107,6 +107,26 @@ class ReportCommonTests(unittest.TestCase):
         self.assertEqual(comparison["prior_as_of"], "2026-07-31")
         self.assertEqual(format_rank_change({"stock_id": "1111", "rank": 1}, comparison), "↑2")
 
+    def test_comparison_does_not_cross_model_config_versions(self) -> None:
+        records = [
+            {
+                "model_id": "defensive_value",
+                "config_version": "0.1.1",
+                "as_of": "2026-07-31",
+                "latest_market_date": "2026-07-30",
+                "eligible_for_backtest": True,
+                "rankings": [{"stock_id": "1111", "rank": 3}],
+            }
+        ]
+        result = _result()
+        result["config"] = {"version": "0.2.0"}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "history.jsonl"
+            path.write_text("".join(json.dumps(item) + "\n" for item in records), encoding="utf-8")
+            comparison = load_rank_comparison(result, path)
+        self.assertEqual(comparison["prior_market_date"], "")
+        self.assertEqual(format_rank_change({"stock_id": "1111", "rank": 1}, comparison), "—")
+
     def test_panels_show_signal_freshness_and_all_check_states(self) -> None:
         metadata = _result()["metadata"]
         metadata["revenue_signal_coverage"]["universe"] = 0.002

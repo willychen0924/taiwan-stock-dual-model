@@ -13,6 +13,7 @@ from .report_common import (
     load_rank_comparison,
     monitor_report_css,
     rank_comparison_note,
+    revenue_signal_display,
     score_composition_bar,
     sortable_cell,
     sortable_table_script,
@@ -35,6 +36,7 @@ CSV_FIELDS = [
     "close",
     "market_value",
     "avg_daily_turnover",
+    "avg_daily_volume",
     "per",
     "pbr",
     "dividend_yield",
@@ -50,6 +52,7 @@ CSV_FIELDS = [
     "complete_profit_years",
     "positive_fcf_years",
     "complete_fcf_years",
+    "revenue_period",
     "revenue_3m_yoy",
     "latest_revenue_yoy",
     "ttm_operating_margin",
@@ -273,22 +276,26 @@ def _value_row_html(
     row_id = f"value-{stock_id}"
     main = f'<tr data-row-id="{html.escape(row_id, quote=True)}">' + "".join(
         [
-            sortable_cell(str(row["rank"]), row["rank"]),
+            sortable_cell(str(row["rank"]), row["rank"], css_class="rank-cell"),
             sortable_cell(html.escape(change), change, css_class="rank-change"),
-            sortable_cell(f"<strong>{html.escape(stock_id)}</strong>", stock_id),
+            sortable_cell(f"<strong>{html.escape(stock_id)}</strong>", stock_id, css_class="stock-id"),
             sortable_cell(html.escape(str(row.get("stock_name") or "")), row.get("stock_name")),
-            sortable_cell(html.escape(str(row.get("industry") or "")), row.get("industry")),
+            sortable_cell(html.escape(str(row.get("industry") or "")), row.get("industry"), css_class="industry"),
             sortable_cell(composition, row.get("total_score"), css_class="composition"),
             sortable_cell(_format_number(row.get("total_score")), row.get("total_score"), css_class="total"),
             sortable_cell(_format_percent(row.get("net_cash_ratio")), row.get("net_cash_ratio")),
             sortable_cell(_format_percent(row.get("liquidation_coverage")), row.get("liquidation_coverage")),
             sortable_cell(_format_number(row.get("per"), 2), row.get("per")),
             sortable_cell(_format_number(row.get("pbr"), 2), row.get("pbr")),
-            sortable_cell(_format_percent(row.get("revenue_3m_yoy")), row.get("revenue_3m_yoy")),
             sortable_cell(
-                _format_number(float(row["avg_daily_turnover"]) / 1_000_000, 0)
-                if row.get("avg_daily_turnover") is not None else "—",
-                row.get("avg_daily_turnover"),
+                revenue_signal_display(row.get("revenue_3m_yoy"), row.get("revenue_period")),
+                row.get("revenue_3m_yoy"),
+            ),
+            sortable_cell(
+                _format_number(float(row["avg_daily_volume"]) / 1_000, 0)
+                if row.get("avg_daily_volume") is not None else "—",
+                row.get("avg_daily_volume"),
+                css_class="volume",
             ),
         ]
     ) + "</tr>"
@@ -305,10 +312,10 @@ def _value_row_html(
 
 def _value_table(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict[str, dict[str, str]]) -> str:
     headers = [
-        ("排名", "number"), ("較前次", "text"), ("代碼", "text"), ("公司", "text"), ("產業", "text"),
+        ("#", "number"), ("Δ", "text"), ("代碼", "text"), ("公司", "text"), ("產業", "text"),
         ("分數組成", "number"), ("總分", "number"), ("淨現金/市值", "number"),
         ("清算覆蓋", "number"), ("本益比", "number"), ("本淨比", "number"), ("3M營收", "number"),
-        ("日均額（百萬）", "number"),
+        ("20日均量（張）", "number"),
     ]
     score_columns = {5: "key-first", 7: "key-first", 8: "key-second", 9: "key-second", 10: "key-second", 11: "key-third"}
     head = "".join(
@@ -318,7 +325,7 @@ def _value_table(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichm
         for index, (label, kind) in enumerate(headers)
     )
     body = "".join(_value_row_html(row, comparison, enrichment) for row in rows)
-    return f'<table class="sortable-table"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
+    return f'<div class="tablewrap"><table class="sortable-table"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
 def _build_html(
@@ -357,9 +364,9 @@ def _build_html(
 <style>{monitor_report_css()}</style>
 </head>
 <body><div class="wrap">
-<div class="hero"><div><h1>台股防禦型價值監控台</h1><p>資料日 {html.escape(meta['latest_market_date'])}｜完整財報季 {html.escape(meta['latest_financial_quarter'])}｜研究候選，不是買進建議</p></div><div class="hero-status">模型 {html.escape(str(meta.get('model_status') or 'UNKNOWN'))}</div></div>
+<div class="hero"><div><h1>台股防禦型價值篩選</h1><p>市場日 {html.escape(meta['latest_market_date'])}　·　財報季 {html.escape(meta['latest_financial_quarter'])}　·　研究候選，不是買進建議</p></div><div class="hero-status {html.escape(str(meta.get('model_status') or 'UNKNOWN').lower())}">{html.escape(str(meta.get('model_status') or 'UNKNOWN'))}</div></div>
 {checks_panel}
 <div class="panel"><div class="panel-head"><div><h2>精華候選</h2><p class="note">{comparison_note}</p></div><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{focus_table}
 <details class="watchlist"><summary>展開自選100第 21–100 名（{len(watchlist_remainder)} 檔）</summary>{remainder_table}</details></div>
-<p class="note">量化分數只負責縮小研究範圍。治理誠信、競爭優勢、AI／機器人／矽光子等催化必須經法說、年報與公開資訊人工查證。技術面與籌碼面為外部呈現欄位，不影響模型排名。清算價值採折價估計，商譽預設為零，不保證股價下檔。</p>
+<p class="note">量化分數只負責縮小研究範圍。3M營收採各公司截至報表日最新、具完整三個月資料的年增率，列內標示期別；流動性硬門檻仍以20日均成交額判定，表格僅改顯示20日均量。治理誠信、競爭優勢與催化必須經法說、年報及公開資訊人工查證。技術面與籌碼面為外部呈現欄位，不影響模型排名。</p>
 {sortable_script}</div></body></html>"""

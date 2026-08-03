@@ -44,10 +44,10 @@ def _model_table(
             ]
         row_id = f"{model_id}-{stock_id}"
         body.append(f'<tr data-row-id="{html.escape(row_id, quote=True)}">' + "".join([
-            sortable_cell(str(row["rank"]), row["rank"]),
-            sortable_cell(f"<strong>{html.escape(stock_id)}</strong>", stock_id),
+            sortable_cell(str(row["rank"]), row["rank"], css_class="rank-cell"),
+            sortable_cell(f"<strong>{html.escape(stock_id)}</strong>", stock_id, css_class="stock-id"),
             sortable_cell(html.escape(str(row.get("stock_name") or "")), row.get("stock_name")),
-            sortable_cell(html.escape(str(row.get("industry") or "")), row.get("industry")),
+            sortable_cell(html.escape(str(row.get("industry") or "")), row.get("industry"), css_class="industry"),
             sortable_cell(score_composition_bar(segments), row.get("total_score"), css_class="composition"),
             sortable_cell(f"{float(row.get('total_score') or 0):.1f}", row.get("total_score"), css_class="total"),
         ]) + "</tr>" + (
@@ -63,7 +63,7 @@ def _model_table(
         ("分數組成", "number"), ("總分", "number"),
     ]
     head = "".join(f'<th data-type="{kind}">{html.escape(label)}</th>' for label, kind in headers)
-    return f'<table class="sortable-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table>'
+    return f'<div class="tablewrap"><table class="sortable-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
 
 
 def build_combined_html(
@@ -99,10 +99,10 @@ def build_combined_html(
         )
         if intersection_rows:
             intersection = (
-                '<table class="sortable-table"><thead><tr><th data-type="text">代碼</th><th data-type="text">公司</th>'
+                '<div class="tablewrap"><table class="sortable-table"><thead><tr><th data-type="text">代碼</th><th data-type="text">公司</th>'
                 '<th data-type="number">價值排名</th><th data-type="number">動能排名</th>'
                 '<th data-type="number">價值總分</th><th data-type="number">動能總分</th></tr></thead>'
-                f"<tbody>{intersection_rows}</tbody></table>"
+                f"<tbody>{intersection_rows}</tbody></table></div>"
             )
         else:
             intersection = '<p class="empty">本次兩邊精華20沒有交集。</p>'
@@ -146,7 +146,7 @@ def build_combined_html(
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>台股雙模型研究報告｜{html.escape(str(value_meta.get('as_of') or ''))}</title>
 <style>{monitor_report_css()}</style></head><body><div class="wrap">
-<div class="hero"><div><h1>台股雙模型監控台</h1><p>報表日 {html.escape(str(value_meta.get('as_of') or ''))}｜市場資料 {html.escape(str(value_meta.get('latest_market_date') or ''))}｜排名只用於研究排序，不是買進建議</p></div><div class="hero-status">交集 {html.escape(str(intersection_count))}</div></div>
+<div class="hero"><div><h1>台股雙模型監控台</h1><p>報表日 {html.escape(str(value_meta.get('as_of') or ''))}　·　市場日 {html.escape(str(value_meta.get('latest_market_date') or ''))}　·　排名只用於研究排序，不是買進建議</p></div><div class="hero-status">交集 {html.escape(str(intersection_count))}</div></div>
 <div class="grid">{value_status}{momentum_status}</div>
 <div class="panel"><h2>雙模型交集</h2><p class="note">{html.escape(intersection_note)}</p>{intersection}</div>
 <div class="grid"><section class="panel"><div class="panel-head"><h2>防禦型價值精華20</h2><div class="legend"><span class="key-dot key-first"></span>防禦　<span class="key-dot key-second"></span>估值　<span class="key-dot key-third"></span>動能</div></div>{_model_table(value_focus, model_id='defensive_value', enrichment=enrichment)}</section>

@@ -110,10 +110,11 @@ class ModelSummaryTests(unittest.TestCase):
         self.assertIn("展開自選100第 21–100 名（1 檔）", page)
         self.assertIn("data-sort", page)
         self.assertIn("中性", page)
-        self.assertIn("台股防禦型價值監控台", page)
+        self.assertIn("台股防禦型價值篩選", page)
         self.assertIn("本益比", page)
         self.assertIn("本淨比", page)
         self.assertIn("技術面、籌碼面與模型短評", page)
+        self.assertIn("20日均量（張）", page)
         self.assertNotIn("<th data-type=\"text\">治理</th>", page)
         self.assertNotIn("cdn", page.lower())
 

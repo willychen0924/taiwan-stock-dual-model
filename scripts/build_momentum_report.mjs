@@ -13,6 +13,7 @@ const payload = JSON.parse(await fs.readFile(inputPath, "utf8"));
 const { metadata: meta, config, checks, results } = payload;
 const enrichment = await loadEnrichment(root, meta.as_of);
 const MILLION = 1_000_000;
+const THOUSAND = 1_000;
 
 function scaled(value, divisor) {
   return value == null ? null : Number(value) / divisor;
@@ -105,7 +106,7 @@ explanation.getRange("A3:H3").merge();
 explanation.getRange("A3").values = [["核心概念"]];
 explanation.getRange("A3:H3").format = { fill: colors.green, font: { bold: true, color: colors.white, size: 12 } };
 explanation.getRange("A4:H8").merge();
-explanation.getRange("A4").values = [["這套模型以「高品質營運動能」為核心，尋找營收、獲利與營益率正在改善，而且成長能獲得現金流與財務體質支持的公司。\n\n模型關注的是企業營運是否加速，而不是短期股價上漲。營收成長若未反映至獲利、營益率或現金流，會降低評價；單月暴增、低基期轉盈及一次性收益也會另外標示。量化排名只用來縮小研究範圍，不代表預期報酬或買進建議。Excel 顯示單位：成交額為百萬元。"]];
+explanation.getRange("A4").values = [["這套模型以「高品質營運動能」為核心，尋找營收、獲利與營益率正在改善，而且成長能獲得現金流與財務體質支持的公司。\n\n模型關注的是企業營運是否加速，而不是短期股價上漲。營收成長若未反映至獲利、營益率或現金流，會降低評價；單月暴增、低基期轉盈及一次性收益也會另外標示。量化排名只用來縮小研究範圍，不代表預期報酬或買進建議。Excel 主排名的20日均量以張顯示；硬門檻與試算稽核仍使用20日均成交額（百萬元）。"]];
 explanation.getRange("A4:H8").format = { fill: colors.lightBlue, font: { color: colors.black, size: 11 }, wrapText: true, verticalAlignment: "center" };
 explanation.getRange("A10:H10").merge();
 explanation.getRange("A10").values = [["篩選流程"]];
@@ -205,7 +206,7 @@ ranking.getRange("A3:Y3").merge();
 ranking.getRange("A3").values = [["本頁為靜態模型結果，不因工作簿參數變動而改寫；公式重算與抽樣驗證請見「試算稽核」。"]];
 ranking.getRange("A3").format = { font: { italic: true, color: colors.gray } };
 const mainHeaders = [
-  "排名", "代碼", "公司", "產業", "漏斗階段", "分類", "治理狀態", "收盤價", "20日均成交額(百萬元)", "本益比", "本淨比",
+  "排名", "代碼", "公司", "產業", "漏斗階段", "分類", "治理狀態", "收盤價", "20日均量(張)", "本益比", "本淨比",
   "近3月營收YoY", "單月營收YoY", "營收加速度", "TTM淨利成長", "營益率年變化", "獲利年數", "正FCF年數",
   "現金轉換", "負債/資產", "淨現金/市值", "營運動能分", "動能品質分", "估值流動性分", "總分",
 ];
@@ -214,7 +215,7 @@ formatHeader(ranking.getRange("A5:Y5"));
 ranking.getRange("A5:Y5").format.rowHeight = 44;
 const mainRows = passingRows.map((row) => [
   row.rank, row.stock_id, row.stock_name, row.industry, row.funnel_stage, row.momentum_bucket, row.governance_status,
-  row.close, scaled(row.avg_daily_turnover, MILLION), row.per, row.pbr, row.revenue_3m_yoy, row.latest_revenue_yoy,
+  row.close, scaled(row.avg_daily_volume, THOUSAND), row.per, row.pbr, row.revenue_3m_yoy, row.latest_revenue_yoy,
   row.revenue_acceleration, row.ttm_net_income_growth, row.ttm_operating_margin_change, row.profitable_years,
   row.positive_fcf_years, row.cash_conversion, row.liabilities_ratio, row.net_cash_ratio, row.operating_momentum_score,
   row.quality_score, row.valuation_liquidity_score, row.total_score,
@@ -223,7 +224,7 @@ const rankingLastRow = 5 + mainRows.length;
 if (mainRows.length) {
   ranking.getRange(`A6:Y${rankingLastRow}`).values = mainRows;
   ranking.getRange(`H6:H${rankingLastRow}`).format.numberFormat = "#,##0.00";
-  ranking.getRange(`I6:I${rankingLastRow}`).format.numberFormat = '#,##0"百萬"';
+  ranking.getRange(`I6:I${rankingLastRow}`).format.numberFormat = '#,##0"張"';
   ranking.getRange(`J6:K${rankingLastRow}`).format.numberFormat = "0.0x";
   ranking.getRange(`L6:P${rankingLastRow}`).format.numberFormat = "0.0%";
   ranking.getRange(`S6:S${rankingLastRow}`).format.numberFormat = "0.00x";
