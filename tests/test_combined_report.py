@@ -99,6 +99,27 @@ class CombinedReportTests(unittest.TestCase):
         self.assertIn(".lrow>summary:focus:not(:focus-visible){outline:none}", page)
         self.assertIn(".lrow>summary:focus-visible{outline:2px solid var(--link)", page)
 
+    def test_mobile_typography_does_not_expand_inside_wide_tables(self) -> None:
+        """iOS 不得自動放大展開短評；明細須依手機可視寬度換行。"""
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        self.assertIn("html{-webkit-text-size-adjust:100%;text-size-adjust:100%}", page)
+        self.assertIn(
+            ".dwrap{position:sticky;left:0;width:calc(100vw - 26px);"
+            "max-width:calc(100vw - 26px)",
+            page,
+        )
+        self.assertIn(
+            ".drow{grid-template-columns:58px minmax(0,1fr);gap:10px;"
+            "align-items:start",
+            page,
+        )
+        self.assertIn(
+            ".drow dd{font-size:12px;line-height:1.65;overflow-wrap:anywhere;"
+            "word-break:break-word}",
+            page,
+        )
+        self.assertIn(".statusbox .checks{overflow-x:auto;-webkit-overflow-scrolling:touch}", page)
+
     def test_rows_six_to_twenty_expand_to_model_summary_only(self) -> None:
         page = build_combined_html(
             _result_with_ranked_rows("defensive_value"),

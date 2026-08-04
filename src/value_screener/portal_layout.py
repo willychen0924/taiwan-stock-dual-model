@@ -144,6 +144,7 @@ def portal_css() -> str:
     model_min, inter_min = grid_min_width(COLS_VALUE), grid_min_width(COLS_INTERSECTION)
     return theme_css() + f"""
 *{{box-sizing:border-box}}
+html{{-webkit-text-size-adjust:100%;text-size-adjust:100%}}
 body{{margin:0;background:var(--page);color:var(--ink);font-size:13px;
  font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Segoe UI",sans-serif;
  -webkit-font-smoothing:antialiased}}
@@ -323,5 +324,18 @@ details.lrow[open]{{border-bottom:6px solid var(--page);box-shadow:inset 3px 0 0
 .foot{{margin-top:10px;color:var(--ink2);font-size:11.5px;line-height:1.55}}
 @media(max-width:760px){{.wrap{{padding:14px 12px 40px}}.head{{padding:0 16px 4px}}
  .accent{{margin:0 -16px 14px}}
- .tabs label,.period-link{{padding:8px 14px;font-size:13.5px}}}}
+ .head h1{{font-size:22px}}.tabrow{{gap:12px;margin:15px 0 17px}}
+ .tabs label,.period-link{{padding:8px 14px;font-size:13px}}
+ .listwrap{{-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain}}
+ /* 桌面主表維持完整欄寬並可橫向滑動；展開說明則固定在手機可視寬度，
+    避免 iOS 把長文字依 1200px 表格寬度排版後裁掉。 */
+ .dwrap{{position:sticky;left:0;width:calc(100vw - 26px);max-width:calc(100vw - 26px);
+  padding:3px 12px 7px}}
+ .drow{{grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start;padding:7px 0}}
+ .drow dt{{font-size:10.5px;line-height:1.65}}
+ .drow dd{{font-size:12px;line-height:1.65;overflow-wrap:anywhere;word-break:break-word}}
+ .drow dd .sigchip{{margin-right:6px}}
+ /* 檢核明細同樣可能比手機寬；保留可讀字級，以橫向捲動承接完整欄位。 */
+ .statusbox .checks{{overflow-x:auto;-webkit-overflow-scrolling:touch}}
+ .statusbox table{{min-width:620px}}}}
 """
