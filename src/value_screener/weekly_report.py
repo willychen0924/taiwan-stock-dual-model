@@ -630,14 +630,16 @@ def build_weekly_html(
 /* 表格填滿半版寬度較好讀，但 table-layout:auto 會按比例放大各欄，
    兩張表的欄界就對不齊。改用 fixed 並補一個吸收剩餘寬度的空白欄，
    前五欄因此完全照設定值，跨表對齊。 */
-.tablewrap table.stocktable{width:100%;table-layout:fixed}
+.tablewrap table.stocktable{width:100%;table-layout:fixed;
+ --stock-key:62px;--stock-code:66px;--stock-name:116px;--stock-period:92px;--stock-detail:148px}
 .stocktable .spacer{width:auto;padding:0}
-.stocktable th:nth-child(1),.stocktable td:nth-child(1){width:56px}
-.stocktable th:nth-child(2),.stocktable td:nth-child(2){width:58px}
-.stocktable th:nth-child(3),.stocktable td:nth-child(3){width:96px;overflow:hidden;
+.stocktable th:nth-child(1),.stocktable td:nth-child(1){width:var(--stock-key)}
+.stocktable th:nth-child(2),.stocktable td:nth-child(2){width:var(--stock-code)}
+.stocktable th:nth-child(3),.stocktable td:nth-child(3){width:var(--stock-name);overflow:hidden;
  text-overflow:ellipsis}
-.stocktable th:nth-child(4),.stocktable td:nth-child(4){width:76px}
-.stocktable th:nth-child(5),.stocktable td:nth-child(5){width:132px}
+.stocktable th:nth-child(4),.stocktable td:nth-child(4){width:var(--stock-period)}
+.stocktable th:nth-child(5),.stocktable td:nth-child(5){width:var(--stock-detail)}
+.stocktable tbody td{vertical-align:middle}
 .stocktable .lead{font-weight:700}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:0 -18px -17px}
 .cols2>div{min-width:0;overflow-x:auto}
