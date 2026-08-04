@@ -259,17 +259,19 @@ def two_columns(left: str, right: str) -> str:
 def rank_table(caption: str, rows: str) -> str:
     return (
         f'<div class="subcap">{caption}</div>'
-        '<div class="tablewrap"><table class="stocktable"><thead><tr><th>代碼</th><th>公司</th>'
-        '<th class="number">期初</th><th class="number">期末</th>'
-        f'<th class="number">變動</th></tr></thead><tbody>{rows}</tbody></table></div>'
+        '<div class="tablewrap"><table class="stocktable"><thead>'
+        '<tr><th class="number lead">變動</th><th>代碼</th><th>公司</th>'
+        f'<th class="number">期初</th><th class="number">期末</th></tr></thead>'
+        f'<tbody>{rows}</tbody></table></div>'
     )
 
 
 def stability_table(rows: str) -> str:
     return (
-        '<div class="tablewrap"><table class="stocktable"><thead><tr><th>代碼</th><th>公司</th>'
-        '<th class="number">在榜／連續</th><th>穩定度</th>'
-        f'<th class="number">名次</th></tr></thead><tbody>{rows}</tbody></table></div>'
+        '<div class="tablewrap"><table class="stocktable"><thead>'
+        '<tr><th class="number lead">名次</th><th>代碼</th><th>公司</th>'
+        f'<th class="number">在榜／連續</th><th>穩定度</th></tr></thead>'
+        f'<tbody>{rows}</tbody></table></div>'
     )
 
 
@@ -304,10 +306,12 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         streak = _longest_streak(presence)
         stability_cells.append(
             "<tr>"
-            f'<td class="stock-id">{html.escape(stock_id)}</td><td>{html.escape(str(item.get("stock_name") or ""))}</td>'
+            f'<td class="number lead">{int(item["rank"])}</td>'
+            f'<td class="stock-id">{html.escape(stock_id)}</td>'
+            f'<td>{html.escape(str(item.get("stock_name") or ""))}</td>'
             f'<td class="number">{days}／{streak}</td>'
             f'<td><span class="stability"><i style="width:{days / len(segment):.1%}"></i></span></td>'
-            f'<td class="number">{int(item["rank"])}</td></tr>'
+            "</tr>"
         )
 
     changes: list[tuple[int, str, dict[str, Any], dict[str, Any]]] = []
@@ -320,11 +324,12 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
     def _change_rows(items: list[tuple[int, str, dict[str, Any], dict[str, Any]]]) -> str:
         return "".join(
             "<tr>"
+            f'<td class="number lead {"up" if delta > 0 else "down"}">'
+            f'{"↑" if delta > 0 else "↓"}{abs(delta)}</td>'
             f'<td class="stock-id">{html.escape(stock_id)}</td>'
             f'<td>{html.escape(str(last_item.get("stock_name") or ""))}</td>'
             f'<td class="number dim">{int(first_item["rank"])}</td>'
             f'<td class="number">{int(last_item["rank"])}</td>'
-            f'<td class="number {"up" if delta > 0 else "down"}">{"↑" if delta > 0 else "↓"}{abs(delta)}</td>'
             "</tr>"
             for delta, stock_id, first_item, last_item in items
         ) or '<tr><td colspan="5" class="dim">無</td></tr>'
@@ -344,8 +349,10 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         cells = "".join(f'<td class="number">{delta:+.1f}</td>' for delta in deltas)
         row = (
             "<tr>"
-            f'<td class="stock-id">{html.escape(stock_id)}</td><td>{html.escape(str(last_item.get("stock_name") or ""))}</td>'
-            f'{cells}<td class="number">{float(last_item.get("total_score") or 0) - float(first_item.get("total_score") or 0):+.1f}</td></tr>'
+            f'<td class="number lead">'
+            f'{float(last_item.get("total_score") or 0) - float(first_item.get("total_score") or 0):+.1f}</td>'
+            f'<td class="stock-id">{html.escape(stock_id)}</td>'
+            f'<td>{html.escape(str(last_item.get("stock_name") or ""))}</td>{cells}</tr>'
         )
         component_rows.append((sum(abs(value) for value in deltas), row))
     component_rows.sort(key=lambda item: item[0], reverse=True)
@@ -354,8 +361,9 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         component_table = section(
             "分數組成變化",
             "期末精華20中分數區塊變化最大的10檔；正負號只描述模型分數變化",
-            '<div class="tablewrap"><table class="stocktable"><thead><tr><th>代碼</th><th>公司</th>'
-            f'{component_head}<th class="number">總分</th></tr></thead><tbody>'
+            '<div class="tablewrap"><table class="stocktable"><thead>'
+            '<tr><th class="number lead">總分</th><th>代碼</th><th>公司</th>'
+            f'{component_head}</tr></thead><tbody>'
             f'{"".join(row for _, row in component_rows[:10])}</tbody></table></div>',
         )
     else:
@@ -453,7 +461,7 @@ def build_weekly_html(
     )
 
     prior_start, prior_end = prior_week_window(week_start, week_end)
-    industry_rows: list[str] = []
+    industry_blocks: list[str] = []
     for model_id, label in MODEL_LABELS.items():
         selected = selected_by_model[model_id]
         prior_selected, _ = last_eligible_by_market_date(
@@ -461,23 +469,25 @@ def build_weekly_html(
         )
         now = industry_mix(selected[-1] if selected else None)
         before = industry_mix(prior_selected[-1] if prior_selected else None)
-        names = sorted(set(now) | set(before), key=lambda key: (-now.get(key, 0), key))
-        if not names:
-            industry_rows.append(f'<tr><td>{label}</td><td class="dim grow" colspan="2">本週沒有有效觀測</td></tr>')
+        if not now:
+            industry_blocks.append(f'<div><div class="subcap">{label}</div>'
+                                   '<p class="dim">本週沒有有效觀測。</p></div>')
             continue
-        cells = "、".join(
-            f'{html.escape(name)} <b>{now.get(name, 0)}</b>'
-            + (
-                f'<small class="{"up" if now.get(name, 0) > before.get(name, 0) else "out"}">'
-                f'{now.get(name, 0) - before.get(name, 0):+d}</small>'
-                if before and now.get(name, 0) != before.get(name, 0) else ""
+        top = max(now.values())
+        lines = []
+        for name, count in list(now.items())[:8]:
+            shift = count - before.get(name, 0) if before else None
+            delta = (
+                f'<small class="{"up" if shift > 0 else "out"}">{shift:+d}</small>'
+                if shift else ""
             )
-            for name in names[:8]
-        )
-        industry_rows.append(
-            f'<tr><td>{label}</td><td class="grow">{cells}</td>'
-            f'<td class="dim">{"對照上週" if before else "上週無有效觀測"}</td></tr>'
-        )
+            lines.append(
+                f'<div class="ibar"><span class="iname">{html.escape(name)}</span>'
+                f'<span class="itrack"><i style="width:{count / top:.0%}"></i></span>'
+                f'<span class="icount">{count}{delta}</span></div>'
+            )
+        caption = label + ("" if before else "　<small class=\"dim\">上週無有效觀測</small>")
+        industry_blocks.append(f'<div><div class="subcap">{caption}</div>{"".join(lines)}</div>')
 
     wow_blocks: list[str] = []
     for model_id, label in MODEL_LABELS.items():
@@ -550,6 +560,8 @@ def build_weekly_html(
         for model_id, label in MODEL_LABELS.items()
     )
     highlights: list[str] = []
+    incomparable: list[str] = []
+    reasons: set[str] = set()
     for model_id, label in MODEL_LABELS.items():
         wow = week_over_week(records, model_id=model_id, week_start=week_start, week_end=week_end)
         if wow["comparable"]:
@@ -558,7 +570,12 @@ def build_weekly_html(
                 f'新進 {len(wow["entered"])}、掉出 {len(wow["left"])}'
             )
         else:
-            highlights.append(f"{label}與上週不可比（{wow['reason']}）")
+            incomparable.append(label)
+            reasons.add(str(wow["reason"]))
+    # 兩個模型講同一句話時合併，摘要才不會把同一件事說兩遍
+    if incomparable:
+        who = "兩個模型" if len(incomparable) == len(MODEL_LABELS) else "、".join(incomparable)
+        highlights.append(f'{who}與上週不可比（{"；".join(sorted(reasons))}）')
     summary_bits = [
         f'市場週 <b>{week_start}～{week_end}</b>，有效市場日 {valid_counts}。',
         "；".join(highlights) + "。",
@@ -617,10 +634,12 @@ def build_weekly_html(
 .tablewrap thead th:last-child,.tablewrap tbody td:last-child{padding-right:18px}
 .tablewrap tbody tr:hover td{background:var(--fill)}
 .stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
-/* 個股表的代碼／公司固定寬，不同表格之間才對得齊 */
-.stocktable th:nth-child(1),.stocktable td:nth-child(1){width:62px}
-.stocktable th:nth-child(2),.stocktable td:nth-child(2){width:104px;overflow:hidden;
+/* 三張個股表統一為「關鍵數值 → 代碼 → 公司 → 細節」，欄寬固定才對得齊 */
+.stocktable th:nth-child(1),.stocktable td:nth-child(1){width:56px}
+.stocktable th:nth-child(2),.stocktable td:nth-child(2){width:58px}
+.stocktable th:nth-child(3),.stocktable td:nth-child(3){width:96px;overflow:hidden;
  text-overflow:ellipsis}
+.stocktable .lead{font-weight:700}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:0 -18px -17px}
 .cols2>div{min-width:0;overflow-x:auto}
 .cols2 .tablewrap{margin:0}
@@ -628,6 +647,14 @@ def build_weekly_html(
 .cols2>div+div .tablewrap thead th:first-child,
 .cols2>div+div .tablewrap tbody td:first-child{padding-left:8px}
 .subcap{font-size:11.5px;font-weight:700;color:var(--ink2);padding:0 18px 6px}
+.ibar{display:grid;grid-template-columns:110px 1fr 46px;align-items:center;gap:10px;
+ padding:3px 18px;font-size:12.5px}
+.iname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+.itrack{height:7px;border-radius:99px;background:var(--line2);overflow:hidden}
+.itrack i{display:block;height:100%;background:var(--active);opacity:.45}
+.icount{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink)}
+.icount small{margin-left:4px;font-weight:600}
+.cols2>div+div .ibar{padding-left:8px}
 .cols2>div+div .subcap{padding-left:8px}
 @media(max-width:900px){.cols2{grid-template-columns:1fr;gap:14px 0}
  .cols2>div+div .tablewrap thead th:first-child,
@@ -703,8 +730,7 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
           f'<tbody>{"".join(wow_blocks)}</tbody></table></div>'),
   section("精華20產業分布",
           "期末組成與上週末對照；產業輪動在週頻最看得出來",
-          '<div class="tablewrap"><table><thead><tr><th>模型</th><th class="grow">產業（檔數）</th>'
-          f'<th>對照</th></tr></thead><tbody>{"".join(industry_rows)}</tbody></table></div>'),
+          two_columns(industry_blocks[0], industry_blocks[1])),
   section("雙模型交集",
           "全週都在的比只出現一兩天的更值得優先研究",
           persistence_block
