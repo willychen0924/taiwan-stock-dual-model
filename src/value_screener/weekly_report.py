@@ -806,8 +806,8 @@ def build_weekly_html(
 .focus-source{font-size:11px;margin-left:7px;color:var(--link);white-space:nowrap;text-decoration:none}
 .focus-source:hover{text-decoration:underline}
 .focus-news{list-style:none;margin:8px 0 0;padding:0;border-top:1px dotted var(--rule)}
-.focus-news li{display:grid;grid-template-columns:118px minmax(220px,.75fr) minmax(260px,1.25fr);
- gap:10px;padding:7px 0;border-bottom:1px dotted var(--rule);align-items:baseline}
+.focus-news li{display:grid;grid-template-columns:150px minmax(220px,.75fr) minmax(260px,1.25fr);
+ column-gap:16px;row-gap:4px;padding:7px 0;border-bottom:1px dotted var(--rule);align-items:baseline}
 .focus-news li:last-child{border-bottom:0;padding-bottom:0}
 .focus-news a{color:var(--link);text-decoration:none;font-size:12.5px;font-weight:600}
 .focus-news a:hover{text-decoration:underline}
