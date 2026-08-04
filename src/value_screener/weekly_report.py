@@ -163,19 +163,12 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
     incoming = [last_top[key] for key in sorted(last_top.keys() - first_top.keys(), key=lambda key: int(last_top[key]["rank"]))]
     outgoing = [first_top[key] for key in sorted(first_top.keys() - last_top.keys(), key=lambda key: int(first_top[key]["rank"]))]
 
-    segment_note = ""
-    if len(segments) > 1:
-        other_segments = [part for part in segments if part is not segment]
-        descriptions = "；".join(
-            f'{part[0].get("latest_market_date")}～{part[-1].get("latest_market_date")} '
-            f'({_version_label(part[0].get("config_version"))}，{len(part)}日)'
-            for part in other_segments
-        )
-        segment_note = (
-            '<p class="weekly-warning">本週包含多個模型版本，以下只比較同版本內最長區間：'
-            f'<b>{first.get("latest_market_date")}～{last.get("latest_market_date")}</b> '
-            f'({_version_label(first.get("config_version"))}，{len(segment)}個有效市場日)。其餘區間：{descriptions}</p>'
-        )
+    segment_note = (
+        f'<p class="note">比較區間 <b>{first.get("latest_market_date")}～{last.get("latest_market_date")}</b>'
+        f'（{_version_label(first.get("config_version"))}，{len(segment)} 個有效市場日）。'
+        + ("本週有多個模型版本，只取同版本內最長區間；詳見頁尾「模型版本與比較區間」。</p>"
+           if len(segments) > 1 else "</p>")
+    )
 
     stability_rows: list[str] = []
     for stock_id, item in sorted(last_top.items(), key=lambda pair: int(pair[1]["rank"])):
@@ -233,7 +226,7 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         component_table = '<div class="weekly-todo">此區間的歷史 schema 尚無完整 components，暫不呈現分數組成變化。</div>'
 
     if len(segment) < 2:
-        comparisons = '<p class="weekly-warning">同版本有效觀測只有1日，暫不計算進出榜與名次變化。</p>'
+        comparisons = '<p class="note">同版本有效觀測只有 1 日，暫不計算進出榜與名次變化。</p>'
     else:
         comparisons = f"""
 <h3>精華20名單變動</h3><div class="inout"><div><b class="in">新增</b>{_chips(incoming, 'in')}</div><div><b class="out">移出</b>{_chips(outgoing, 'out')}</div></div>
@@ -294,10 +287,38 @@ def build_weekly_html(
             version_changes.append(
                 f'{MODEL_LABELS[model_id]}：{" → ".join(_version_label(version) for version in versions)}'
             )
-    version_banner = (
-        '<div class="weekly-warning"><b>本週模型版本有變動，跨版本數字不直接比較。</b><br>'
-        f'{"；".join(version_changes)}</div>'
-        if version_changes else ""
+    version_rows: list[str] = []
+    for model_id, label in MODEL_LABELS.items():
+        selected = selected_by_model[model_id]
+        if not selected:
+            version_rows.append(f'<tr><td>{label}</td><td class="dim" colspan="3">本週沒有有效觀測</td></tr>')
+            continue
+        segment, segments = longest_version_segment(selected)
+        used = (
+            f'{segment[0].get("latest_market_date")}～{segment[-1].get("latest_market_date")}'
+            f'（{len(segment)} 日）'
+        )
+        others = "；".join(
+            f'{part[0].get("latest_market_date")}～{part[-1].get("latest_market_date")}'
+            f'（{_version_label(part[0].get("config_version"))}，{len(part)} 日）'
+            for part in segments if part is not segment
+        ) or "—"
+        version_rows.append(
+            f'<tr><td>{label}</td>'
+            f'<td>{_version_label(segment[0].get("config_version"))}</td>'
+            f'<td>{used}</td><td class="dim">{others}</td></tr>'
+        )
+    has_change = bool(version_changes)
+    version_section = (
+        '<div class="audit"><h2>模型版本與比較區間</h2>'
+        + ('<p class="weekly-warning">本週模型版本有變動：'
+           + "；".join(version_changes)
+           + '。跨版本的名次差異同時包含市場變動與模型變動，無法歸因，因此各模型只比較'
+             '同一版本內最長的連續區間。</p>' if has_change else
+           '<p class="note">本週各模型版本一致，全期間可直接比較。</p>')
+        + '<div class="tablewrap"><table><thead><tr><th>模型</th><th>採用版本</th>'
+          '<th>比較區間</th><th>排除區間</th></tr></thead>'
+          f'<tbody>{"".join(version_rows)}</tbody></table></div></div>'
     )
     navigation = period_navigation(
         "weekly",
@@ -314,6 +335,7 @@ h3:first-of-type{margin-top:0}
 .tablewrap table{width:100%;border-collapse:collapse;font-size:13.5px}
 .tablewrap thead th{background:#f6efe4;color:#6d6055;text-align:left;padding:10px 14px;font-weight:700;
  font-size:11.5px;border-bottom:1px solid #ece2d4;white-space:nowrap}
+.tablewrap thead th.number,.tablewrap thead th.n{text-align:right}
 .tablewrap tbody td{padding:11px 14px;border-bottom:1px solid #f1e8db;vertical-align:top}
 .tablewrap tbody tr:last-child td{border-bottom:none}
 .tablewrap tbody tr:hover td{background:#f6efe4}
@@ -346,9 +368,9 @@ h3:first-of-type{margin-top:0}
 <title>週報 {week_start}～{week_end}｜台股雙模型監控台</title>
 <style>{css}</style></head><body><div class="wrap">
 
-<input type="radio" name="wtab" id="w-overview" class="tabin" checked>
+<input type="radio" name="wtab" id="w-momentum" class="tabin" checked>
 <input type="radio" name="wtab" id="w-value" class="tabin">
-<input type="radio" name="wtab" id="w-momentum" class="tabin">
+<input type="radio" name="wtab" id="w-overview" class="tabin">
 <div class="pagebg" aria-hidden="true"></div>
 
 <header class="head">
@@ -357,14 +379,15 @@ h3:first-of-type{margin-top:0}
   <p class="metaline">市場週 {week_start}～{week_end}<em>·</em>只採用有效且可比較的模型觀測</p>
   <div class="tabrow">
     <div class="tabs">
-      <label for="w-overview">總覽</label>
-      <label for="w-value">防禦價值</label>
       <label for="w-momentum">營運動能</label>
+      <label for="w-value">防禦價值</label>
+      <label for="w-overview">總覽</label>
     </div>
     {navigation}
   </div>
 </header>
-{version_banner}
+<section class="weekly-panel" id="weekly-operating_momentum">{_model_section('operating_momentum', selected_by_model['operating_momentum'])}</section>
+<section class="weekly-panel" id="weekly-defensive_value">{_model_section('defensive_value', selected_by_model['defensive_value'])}</section>
 <section class="weekly-panel" id="weekly-overview">
   <h3>資料品質</h3>
   <p class="note">失效日不納入排名、進出榜或交集比較。</p>
@@ -378,8 +401,7 @@ h3:first-of-type{margin-top:0}
   並處理股利與公司行動後才啟用。</div>
 </section>
 
-<section class="weekly-panel" id="weekly-defensive_value">{_model_section('defensive_value', selected_by_model['defensive_value'])}</section>
-<section class="weekly-panel" id="weekly-operating_momentum">{_model_section('operating_momentum', selected_by_model['operating_momentum'])}</section>
+{version_section}
 
 <p class="foot">本報告只由 rankings_history.jsonl 產生，不依賴 14 天內清除的 reports 目錄。
 每個市場日取檔案中最後一份有效版本；跨版本區間分開處理。

@@ -24,7 +24,8 @@ SCORE_COLORS = {"first": "#5c9b62", "second": "#1e5fae", "third": "#eb6834"}
 PAGE_TINTS = {
     "momentum": "#faf6ef",   # 暖石陶土 88°
     "value": "#eff8fd",      # 冷石灰藍 238°
-    "overview": "#eff9f6",   # 霧綠 178°（雙模型交集／週報總覽）
+    "overview": "#eff9f6",   # 霧綠 178°（雙模型交集）
+    "weekly": "#f8f5fc",     # 淡紫灰 308°（整份週報）
 }
 
 # 欄寬依標題字數估算（11.5px 粗體，中文約 11.5px、拉丁約 6px，色點另計 13px）。
@@ -124,7 +125,7 @@ def portal_css() -> str:
     model_min, inter_min = grid_min_width(COLS_VALUE), grid_min_width(COLS_INTERSECTION)
     page_default = PAGE_TINTS["momentum"]
     tint_momentum, tint_value = PAGE_TINTS["momentum"], PAGE_TINTS["value"]
-    tint_overview = PAGE_TINTS["overview"]
+    tint_overview, tint_weekly = PAGE_TINTS["overview"], PAGE_TINTS["weekly"]
     return f"""
 *{{box-sizing:border-box}}
 body{{margin:0;background:{page_default};color:#251f19;font-size:13px;
@@ -136,13 +137,13 @@ body{{margin:0;background:{page_default};color:#251f19;font-size:13px;
 .tabin{{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}}
 /* 底色圖層：radio 碰不到 body，改由這層承接，切換分頁時換色系 */
 .pagebg{{position:fixed;inset:0;z-index:-1;background:{page_default};transition:background .2s}}
-/* 底色由「看哪個模型」決定，日報與週報一致；期間由分段控制項標示 */
-#t-momentum:checked ~ .pagebg,
-#w-momentum:checked ~ .pagebg{{background:{tint_momentum}}}
-#t-value:checked ~ .pagebg,
-#w-value:checked ~ .pagebg{{background:{tint_value}}}
-#t-inter:checked ~ .pagebg,
-#w-overview:checked ~ .pagebg{{background:{tint_overview}}}
+/* 日報：底色隨模型分頁換色系。週報：整份一色，與日報明顯區隔 */
+#t-momentum:checked ~ .pagebg{{background:{tint_momentum}}}
+#t-value:checked    ~ .pagebg{{background:{tint_value}}}
+#t-inter:checked    ~ .pagebg{{background:{tint_overview}}}
+#w-overview:checked ~ .pagebg,
+#w-value:checked    ~ .pagebg,
+#w-momentum:checked ~ .pagebg{{background:{tint_weekly}}}
 
 .head{{background:#fffdfa;border:1px solid rgba(37,31,25,.09);border-radius:16px;
  padding:0 24px 4px;overflow:hidden;
