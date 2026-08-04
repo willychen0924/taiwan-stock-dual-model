@@ -242,10 +242,11 @@ def section(title: str, note: str, body: str) -> str:
     return f'<div class="sec"><div class="sechead"><h3>{title}</h3>{hint}</div>{body}</div>'
 
 
-def two_columns(left: str, right: str) -> str:
-    """並排兩塊。表格貼齊內容後右側會留下大片空白，切成兩欄同時用掉那片
-    空白並讓高度減半，比較時不必一直捲動。"""
-    return f'<div class="cols2"><div>{left}</div><div>{right}</div></div>'
+def two_columns(left: str, right: str, *, tight: bool = False) -> str:
+    """並排兩塊。固定寬的表格用 tight——1fr 1fr 會讓 418px 的表格各分到
+    七百多像素，中間空出一大片；auto 欄並靠左才會相鄰。"""
+    css = "cols2 tight" if tight else "cols2"
+    return f'<div class="{css}"><div>{left}</div><div>{right}</div></div>'
 
 
 def rank_table(caption: str, rows: str) -> str:
@@ -345,6 +346,7 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
             two_columns(
                 stability_table("".join(stability_cells[: (len(stability_cells) + 1) // 2])),
                 stability_table("".join(stability_cells[(len(stability_cells) + 1) // 2 :])),
+                tight=True,
             )
             if len(stability_cells) > 3
             else stability_table("".join(stability_cells)),
@@ -355,6 +357,7 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
             two_columns(
                 rank_table("▲ 上升最多", _change_rows(risers)),
                 rank_table("▼ 下降最多", _change_rows(fallers)),
+                tight=True,
             ),
         ),
     )
@@ -602,6 +605,7 @@ def build_weekly_html(
 .stocktable th:nth-child(5),.stocktable td:nth-child(5){width:132px}
 .stocktable .lead{font-weight:700}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:0 -18px -17px}
+.cols2.tight{grid-template-columns:auto auto;justify-content:start;gap:0 34px}
 .cols2>div{min-width:0;overflow-x:auto}
 .cols2 .tablewrap{margin:0}
 .cols2 .tablewrap thead th:first-child,.cols2 .tablewrap tbody td:first-child{padding-left:18px}
@@ -615,7 +619,7 @@ def build_weekly_html(
 .icount{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink)}
 .icount small{margin-left:4px;font-weight:600}
 
-@media(max-width:900px){.cols2{grid-template-columns:1fr;gap:14px 0}}
+@media(max-width:900px){.cols2,.cols2.tight{grid-template-columns:1fr;gap:14px 0}}
 /* 警示色與日報一致；整個系統只有一種警報色，異常的辨識度才不會隨頁面浮動 */
 .weekly-warning{margin:14px 0;background:rgba(208,59,59,.07);border-left:4px solid #d03b3b;
  border-radius:9px;padding:12px 15px;color:#a8331f;line-height:1.75;font-size:12.5px}
