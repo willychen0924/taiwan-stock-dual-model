@@ -279,7 +279,7 @@ details.lrow[open]{{border-bottom:6px solid var(--page);box-shadow:inset 3px 0 0
 .sigchip.mid{{background:var(--tint);color:var(--ink2)}}
 .sigchip.down{{background:#fae5dd;color:#b8452a}}
 
-.dwrap{{margin:0;padding:3px 16px 14px;background:var(--fill)}}
+.dwrap{{margin:0;padding:3px 16px 7px;background:var(--fill)}}
 .drow{{display:grid;grid-template-columns:66px 1fr;gap:14px;padding:7px 0;align-items:baseline}}
 .drow+.drow{{border-top:1px dotted var(--rule)}}
 .drow dt{{font-size:11.5px;font-weight:700;color:var(--muted);white-space:nowrap;letter-spacing:.3px}}

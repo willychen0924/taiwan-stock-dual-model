@@ -93,6 +93,7 @@ class CombinedReportTests(unittest.TestCase):
         page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
         self.assertIn("details.lrow[open]{border-bottom:6px solid var(--page)", page)
         self.assertIn(".lrow[open]>summary{background:var(--surface)}", page)
+        self.assertIn(".dwrap{margin:0;padding:3px 16px 7px", page)
         self.assertIn(".lrow>summary:focus:not(:focus-visible){outline:none}", page)
         self.assertIn(".lrow>summary:focus-visible{outline:2px solid var(--link)", page)
 
