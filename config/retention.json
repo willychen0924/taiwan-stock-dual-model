@@ -1,6 +1,7 @@
 {
   "reports": 14,
   "reports/momentum": 14,
+  "data/processed/enrichment": 30,
   "outputs": 30,
   "qa": 7
 }

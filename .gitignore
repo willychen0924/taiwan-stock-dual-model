@@ -8,6 +8,7 @@ node_modules/
 node_modules
 data/raw/
 data/cache/
+data/processed/enrichment/
 reports/
 outputs/
 qa/
