@@ -386,7 +386,7 @@ def build_weekly_html(
         "<tr>"
         f'<td>{label}</td><td class="number">{len(selected_by_model[model_id])}</td>'
         f'<td class="number">{len(invalid_by_model[model_id])}</td>'
-        f'<td class="dim">{html.escape(_invalid_summary(invalid_by_model[model_id]))}</td></tr>'
+        f'<td class="dim grow">{html.escape(_invalid_summary(invalid_by_model[model_id]))}</td></tr>'
         for model_id, label in MODEL_LABELS.items()
     )
 
@@ -400,7 +400,7 @@ def build_weekly_html(
         intersection_rows.append(
             "<tr>"
             f'<td class="stock-id">{html.escape(market_date)}</td><td class="number">{len(common)}</td>'
-            f'<td>{_chips(common, "")}</td></tr>'
+            f'<td class="grow">{_chips(common, "")}</td></tr>'
         )
     intersection_body = "".join(intersection_rows) or '<tr><td colspan="3" class="dim">本週沒有可比較的雙模型有效市場日。</td></tr>'
 
@@ -428,7 +428,7 @@ def build_weekly_html(
         before = industry_mix(prior_selected[-1] if prior_selected else None)
         names = sorted(set(now) | set(before), key=lambda key: (-now.get(key, 0), key))
         if not names:
-            industry_rows.append(f'<tr><td>{label}</td><td class="dim" colspan="2">本週沒有有效觀測</td></tr>')
+            industry_rows.append(f'<tr><td>{label}</td><td class="dim grow" colspan="2">本週沒有有效觀測</td></tr>')
             continue
         cells = "、".join(
             f'{html.escape(name)} <b>{now.get(name, 0)}</b>'
@@ -440,7 +440,7 @@ def build_weekly_html(
             for name in names[:8]
         )
         industry_rows.append(
-            f'<tr><td>{label}</td><td>{cells}</td>'
+            f'<tr><td>{label}</td><td class="grow">{cells}</td>'
             f'<td class="dim">{"對照上週" if before else "上週無有效觀測"}</td></tr>'
         )
 
@@ -449,7 +449,7 @@ def build_weekly_html(
         wow = week_over_week(records, model_id=model_id, week_start=week_start, week_end=week_end)
         if not wow["comparable"]:
             wow_blocks.append(
-                f'<tr><td>{label}</td><td class="dim" colspan="4">不可比：{html.escape(wow["reason"])}</td></tr>'
+                f'<tr><td>{label}</td><td class="dim grow" colspan="4">不可比：{html.escape(wow["reason"])}</td></tr>'
             )
             continue
         wow_blocks.append(
@@ -457,7 +457,7 @@ def build_weekly_html(
             f'<td class="number">{len(wow["stayed"])}</td>'
             f'<td class="number up">{len(wow["entered"])}</td>'
             f'<td class="number out">{len(wow["left"])}</td>'
-            f'<td class="dim">{html.escape(wow["prior_market_date"])} → {html.escape(wow["market_date"])}</td></tr>'
+            f'<td class="dim grow">{html.escape(wow["prior_market_date"])} → {html.escape(wow["market_date"])}</td></tr>'
         )
 
     focus_ids = {
@@ -492,7 +492,7 @@ def build_weekly_html(
     for model_id, label in MODEL_LABELS.items():
         selected = selected_by_model[model_id]
         if not selected:
-            version_rows.append(f'<tr><td>{label}</td><td class="dim" colspan="3">本週沒有有效觀測</td></tr>')
+            version_rows.append(f'<tr><td>{label}</td><td class="dim grow" colspan="3">本週沒有有效觀測</td></tr>')
             continue
         segment, segments = longest_version_segment(selected)
         used = (
@@ -507,7 +507,7 @@ def build_weekly_html(
         version_rows.append(
             f'<tr><td>{label}</td>'
             f'<td>{_version_label(segment[0].get("config_version"))}</td>'
-            f'<td>{used}</td><td class="dim">{others}</td></tr>'
+            f'<td>{used}</td><td class="dim grow">{others}</td></tr>'
         )
     has_change = bool(version_changes)
     valid_counts = "／".join(
@@ -549,7 +549,7 @@ def build_weekly_html(
         + card(section(
             "各模型採用的區間", "",
             '<div class="tablewrap"><table><thead><tr><th>模型</th><th>採用版本</th>'
-            '<th>比較區間</th><th>排除區間</th></tr></thead>'
+            '<th>比較區間</th><th class="grow">排除區間</th></tr></thead>'
             f'<tbody>{"".join(version_rows)}</tbody></table></div>',
         ))
         + "</div>"
@@ -571,10 +571,12 @@ def build_weekly_html(
 .sechint{font-size:11.5px;color:var(--muted);line-height:1.5}
 .tablewrap{overflow-x:auto;margin:0 -18px -17px;padding:0}
 .tablewrap table{width:100%;border-collapse:collapse;font-size:13.5px}
-.tablewrap thead th{background:var(--fill);color:var(--ink2);text-align:left;padding:10px 14px;font-weight:700;
+.tablewrap th,.tablewrap td{width:1%;white-space:nowrap}
+.tablewrap th.grow,.tablewrap td.grow{width:auto;white-space:normal}
+.tablewrap thead th{background:var(--fill);color:var(--ink2);text-align:left;padding:9px 12px;font-weight:700;
  font-size:11.5px;border-bottom:1px solid var(--line2);white-space:nowrap}
 .tablewrap thead th.number,.tablewrap thead th.n{text-align:right}
-.tablewrap tbody td{padding:11px 14px;border-bottom:1px solid var(--tint);vertical-align:top}
+.tablewrap tbody td{padding:9px 12px;border-bottom:1px solid var(--tint);vertical-align:top}
 .tablewrap tbody tr:last-child td{border-bottom:none}
 .tablewrap thead th:first-child,.tablewrap tbody td:first-child{padding-left:18px}
 .tablewrap thead th:last-child,.tablewrap tbody td:last-child{padding-right:18px}
@@ -646,23 +648,23 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
   section("較上週變化",
           "比較本週末與上週末的精華20；跨模型版本時不計算",
           '<div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">留任</th>'
-          '<th class="number">新進</th><th class="number">掉出</th><th>比較基準</th></tr></thead>'
+          '<th class="number">新進</th><th class="number">掉出</th><th class="grow">比較基準</th></tr></thead>'
           f'<tbody>{"".join(wow_blocks)}</tbody></table></div>'),
   section("精華20產業分布",
           "期末組成與上週末對照；產業輪動在週頻最看得出來",
-          '<div class="tablewrap"><table><thead><tr><th>模型</th><th>產業（檔數）</th>'
+          '<div class="tablewrap"><table><thead><tr><th>模型</th><th class="grow">產業（檔數）</th>'
           f'<th>對照</th></tr></thead><tbody>{"".join(industry_rows)}</tbody></table></div>'),
   section("雙模型交集",
           "全週都在的比只出現一兩天的更值得優先研究",
           persistence_block
           + '<div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th>'
-          f'<th>標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div>'),
+          f'<th class="grow">標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div>'),
 )}
 {card(
   section("資料品質",
           "失效日不納入排名、進出榜或交集比較",
           '<div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">有效日</th>'
-          '<th class="number">失效日</th><th>失效原因</th></tr></thead>'
+          '<th class="number">失效日</th><th class="grow">失效原因</th></tr></thead>'
           f'<tbody>{quality_rows}</tbody></table></div>'),
   section("人工複核進度", "", review_block),
   section("前瞻報酬",
