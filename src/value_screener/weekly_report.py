@@ -8,7 +8,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
-from .report_common import monitor_report_css, period_navigation
+from .portal_layout import portal_css
+from .report_common import period_navigation
 
 
 MODEL_LABELS = {
@@ -304,19 +305,86 @@ def build_weekly_html(
         weekly_href="index.html",
         monthly_href=None,
     )
-    css = monitor_report_css() + """
-h3{font-size:14px;margin:22px 0 8px;color:var(--navy)}.number{text-align:right;font-variant-numeric:tabular-nums}
-.weekly-warning{margin:14px 0;background:#fffbeb;border-left:4px solid #d97706;border-radius:9px;padding:12px 15px;color:#92400e;line-height:1.75}
-.weekly-tabs{display:flex;gap:4px;margin-top:16px;border-bottom:2px solid #e2e8f0}.weekly-tabs button{background:none;border:0;padding:10px 18px 11px;font:600 13.5px inherit;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer}.weekly-tabs button[aria-selected="true"]{color:var(--navy);border-bottom-color:var(--navy)}
-.weekly-panel{padding-top:18px}.js .weekly-panel[hidden]{display:none}.weekly-chip{display:inline-block;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:7px;padding:4px 10px;margin:0 6px 5px 0}.weekly-chip.in{background:#f0fdf4;border-color:#bbf7d0}.weekly-chip.out{background:#fef2f2;border-color:#fecaca}.weekly-chip b{font-family:ui-monospace,monospace;color:#0369a1}.inout>div{margin:8px 0}.inout>div>b{display:inline-block;width:50px}.in{color:#047857}.out,.down{color:#b91c1c}.up{color:#047857}.stability{display:block;width:120px;height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden}.stability i{display:block;height:100%;background:#16a34a}.weekly-todo{margin-top:16px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:9px;padding:12px 15px;color:#94a3b8}
+    css = portal_css() + """
+h3{margin:24px 0 8px;font-size:15px;color:#251f19;font-weight:700}
+h3:first-of-type{margin-top:0}
+.n,.number{text-align:right;font-variant-numeric:tabular-nums}
+.tablewrap{background:#fffdfa;border:1px solid rgba(37,31,25,.09);border-radius:16px;overflow-x:auto;
+ box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
+.tablewrap table{width:100%;border-collapse:collapse;font-size:13.5px}
+.tablewrap thead th{background:#f6efe4;color:#6d6055;text-align:left;padding:10px 14px;font-weight:700;
+ font-size:11.5px;border-bottom:1px solid #ece2d4;white-space:nowrap}
+.tablewrap tbody td{padding:11px 14px;border-bottom:1px solid #f1e8db;vertical-align:top}
+.tablewrap tbody tr:last-child td{border-bottom:none}
+.tablewrap tbody tr:hover td{background:#f6efe4}
+.stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#2a78d6}
+.weekly-warning{margin:14px 0;background:#fbf3e4;border-left:4px solid #c07a1e;border-radius:9px;
+ padding:12px 15px;color:#8a5a1a;line-height:1.75;font-size:12.5px}
+.weekly-chip{display:inline-block;background:#f1e8db;border:1px solid #ece2d4;border-radius:8px;
+ padding:4px 10px;margin:0 6px 5px 0;font-size:12.5px}
+.weekly-chip.in{background:#e7f0e3;border-color:#cfe0c8}
+.weekly-chip.out{background:#fae5dd;border-color:#f0cfc4}
+.weekly-chip b{font-family:ui-monospace,Menlo,monospace;color:#2a78d6}
+.inout>div{margin:8px 0}
+.inout>div>b{display:inline-block;width:52px;font-size:11.5px;letter-spacing:.3px}
+.in{color:#3f6b46}.out{color:#b8452a}
+.stability{display:block;width:120px;height:8px;border-radius:999px;background:#ece2d4;overflow:hidden}
+.stability i{display:block;height:100%;background:#5c9b62}
+.weekly-todo{margin-top:16px;background:#f6efe4;border:1px dashed #d9cdbb;border-radius:12px;
+ padding:12px 15px;color:#6d6055;font-size:12.5px;line-height:1.75}
+.weekly-todo b{color:#4a3f35}
+#w-overview:checked ~ #weekly-overview,
+#w-value:checked    ~ #weekly-defensive_value,
+#w-momentum:checked ~ #weekly-operating_momentum{display:block}
+.weekly-panel{display:none;padding-top:18px}
+#w-overview:checked ~ .head .tabs label[for=w-overview],
+#w-value:checked    ~ .head .tabs label[for=w-value],
+#w-momentum:checked ~ .head .tabs label[for=w-momentum]{background:#3a2c22;color:#fff;font-weight:700}
 """
-    return f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>週報 {week_start}～{week_end}｜台股雙模型監控台</title><script>document.documentElement.classList.add('js')</script><style>{css}</style></head><body><div class="wrap">
-<div class="hero"><div><h1>台股雙模型週報</h1><p>市場週 {week_start}～{week_end}　·　只採用有效且可比較的模型觀測</p></div>{navigation}</div>{version_banner}
-<div class="weekly-tabs" role="tablist"><button type="button" aria-selected="true" data-tab="overview">總覽</button><button type="button" aria-selected="false" data-tab="defensive_value">防禦價值</button><button type="button" aria-selected="false" data-tab="operating_momentum">營運動能</button></div>
-<section class="weekly-panel" id="weekly-overview"><h3>資料品質</h3><p class="note">失效日不納入排名、進出榜或交集比較。</p><div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">有效日</th><th class="number">失效日</th><th>失效原因</th></tr></thead><tbody>{quality_rows}</tbody></table></div><h3>雙模型交集逐日變化</h3><p class="note">交集不代表買進建議，只表示同一有效市場日同時進入兩個模型精華20。</p><div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th><th>標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div><div class="weekly-todo"><b>前瞻報酬暫不提供：</b>需累積足夠的5／20／60交易日資料，並處理股利與公司行動後才啟用。</div></section>
-<section class="weekly-panel" id="weekly-defensive_value">{_model_section('defensive_value', selected_by_model['defensive_value'])}</section><section class="weekly-panel" id="weekly-operating_momentum">{_model_section('operating_momentum', selected_by_model['operating_momentum'])}</section>
-<p class="note">本報告只由 rankings_history.jsonl 產生。每個市場日取檔案中最後一份有效版本；跨版本區間分開處理。量化排名只負責縮小研究範圍，不是買進建議。</p>
-<script>const weeklyTabs=Array.from(document.querySelectorAll('.weekly-tabs button'));const weeklyPanels=Array.from(document.querySelectorAll('.weekly-panel'));function selectWeekly(key){{weeklyTabs.forEach((button)=>button.setAttribute('aria-selected',String(button.dataset.tab===key)));weeklyPanels.forEach((panel)=>{{panel.hidden=panel.id!==`weekly-${{key}}`;}});}}weeklyTabs.forEach((button)=>button.addEventListener('click',()=>selectWeekly(button.dataset.tab)));selectWeekly('overview');</script></div></body></html>"""
+    return f"""<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>週報 {week_start}～{week_end}｜台股雙模型監控台</title>
+<style>{css}</style></head><body><div class="wrap">
+
+<input type="radio" name="wtab" id="w-overview" class="tabin" checked>
+<input type="radio" name="wtab" id="w-value" class="tabin">
+<input type="radio" name="wtab" id="w-momentum" class="tabin">
+<div class="pagebg" aria-hidden="true"></div>
+
+<header class="head">
+  <div class="accent"></div>
+  <div class="headrow"><h1>台股雙模型週報</h1></div>
+  <p class="metaline">市場週 {week_start}～{week_end}<em>·</em>只採用有效且可比較的模型觀測</p>
+  <div class="tabrow">
+    <div class="tabs">
+      <label for="w-overview">總覽</label>
+      <label for="w-value">防禦價值</label>
+      <label for="w-momentum">營運動能</label>
+    </div>
+    {navigation}
+  </div>
+</header>
+{version_banner}
+<section class="weekly-panel" id="weekly-overview">
+  <h3>資料品質</h3>
+  <p class="note">失效日不納入排名、進出榜或交集比較。</p>
+  <div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">有效日</th>
+  <th class="number">失效日</th><th>失效原因</th></tr></thead><tbody>{quality_rows}</tbody></table></div>
+  <h3>雙模型交集逐日變化</h3>
+  <p class="note">交集不代表買進建議，只表示同一有效市場日同時進入兩個模型精華20。</p>
+  <div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th>
+  <th>標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div>
+  <div class="weekly-todo"><b>前瞻報酬暫不提供：</b>需累積足夠的5／20／60交易日資料，
+  並處理股利與公司行動後才啟用。</div>
+</section>
+
+<section class="weekly-panel" id="weekly-defensive_value">{_model_section('defensive_value', selected_by_model['defensive_value'])}</section>
+<section class="weekly-panel" id="weekly-operating_momentum">{_model_section('operating_momentum', selected_by_model['operating_momentum'])}</section>
+
+<p class="foot">本報告只由 rankings_history.jsonl 產生，不依賴 14 天內清除的 reports 目錄。
+每個市場日取檔案中最後一份有效版本；跨版本區間分開處理。
+量化排名只負責縮小研究範圍，不是買進建議。</p>
+</div></body></html>"""
 
 
 def write_weekly_report(

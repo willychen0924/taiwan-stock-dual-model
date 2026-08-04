@@ -245,6 +245,7 @@ def build_combined_html(
 <input type="radio" name="tab" id="t-momentum" class="tabin" checked>
 <input type="radio" name="tab" id="t-value" class="tabin">
 <input type="radio" name="tab" id="t-inter" class="tabin">
+<div class="pagebg" aria-hidden="true"></div>
 
 <header class="head">
   <div class="accent"></div>
