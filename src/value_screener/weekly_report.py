@@ -759,7 +759,13 @@ def build_weekly_html(
 .intersection-days .tablewrap thead th{padding-top:6px;padding-bottom:6px}
 .intersection-days .tablewrap tbody td{padding-top:6px;padding-bottom:6px;vertical-align:middle}
 .intersection-days .weekly-chip{padding:2px 7px;margin:0 4px 0 0;font-size:12px;vertical-align:middle}
-.intersection-note{margin:2px 0 0;color:var(--muted);font-size:11.5px}
+.intersection-persistence{background:var(--fill);border:1px solid var(--line2);border-radius:12px;
+ padding:11px 14px 10px}
+.intersection-persistence .inout>div{margin:0;row-gap:7px}
+.intersection-persistence .inout>div>b{flex-basis:100%;width:auto;font-size:12px;letter-spacing:.4px}
+.intersection-persistence .weekly-chip{margin:0 3px 0 0;padding:6px 11px;font-size:13px}
+.intersection-note{margin:10px 0 0;padding-top:8px;border-top:1px solid var(--line2);
+ color:var(--muted);font-size:11.5px;line-height:1.55}
 
 @media(max-width:900px){
  .cols2,.cols2.tight,.industry-grid{grid-template-columns:1fr;gap:18px 0}
@@ -862,7 +868,7 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
           industry_columns(industry_blocks[0], industry_blocks[1])),
   section("雙模型交集",
           "全週都在的比只出現一兩天的更值得優先研究",
-          persistence_block + intersection_days_block),
+          f'<div class="intersection-persistence">{persistence_block}</div>' + intersection_days_block),
 )}
 {card(
   section("資料品質",
