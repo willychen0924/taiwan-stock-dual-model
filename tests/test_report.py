@@ -11,8 +11,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from value_screener.report import (  # noqa: E402
     SUMMARY_MAX_CHARS,
     SUMMARY_MIN_CHARS,
-    _build_html,
     build_model_summary,
+    write_reports,
 )
 
 
@@ -54,69 +54,34 @@ class ModelSummaryTests(unittest.TestCase):
         self.assertIn("成交金額不足", summary)
         self.assertNotIn("買進", summary)
 
-    def test_html_has_score_bars_collapsed_watchlist_and_sorting(self) -> None:
-        results = []
-        for rank in range(1, 22):
-            results.append(
-                {
-                    "rank": rank,
-                    "stock_id": f"{rank:04d}",
-                    "stock_name": f"公司{rank}",
-                    "industry": "測試業",
-                    "hard_pass": True,
-                    "total_score": 70.0,
-                    "defense_score": 40.0,
-                    "valuation_score": 20.0,
-                    "momentum_score": 10.0,
-                    "per": 12.0,
-                    "pbr": 1.2,
-                    "avg_daily_turnover": 80_000_000,
-                    "net_cash_ratio": 0.2,
-                    "liquidation_coverage": 0.3,
-                    "revenue_3m_yoy": 0.1,
-                    "model_summary": "僅供研究篩選，仍須公開資訊查證。",
-                    "governance_status": "待複核",
-                }
-            )
-        payload = {
-            "metadata": {
-                "model_status": "OK",
-                "as_of": "2026-08-03",
-                "latest_market_date": "2026-07-31",
-                "latest_financial_quarter": "2026-03-31",
-                "latest_revenue_period": "2026-06",
-                "universe_count": 21,
-                "operating_company_count": 21,
-                "hard_pass_count": 21,
-                "watchlist_count": 21,
-                "focus_count": 20,
-                "revenue_signal_coverage": {
-                    "signal_key": "revenue_3m_yoy",
-                    "signal_label": "3M月營收年增率",
-                    "ranked": 1.0,
-                    "universe": 1.0,
-                    "threshold": 0.8,
-                },
+    def test_write_reports_emits_data_only(self) -> None:
+        """單頁 HTML 已停產——入口頁的分頁已完整涵蓋兩個模型，同一份資料
+        維護兩套呈現只會失去同步。JSON 與 CSV 仍是稽核來源，照常輸出。"""
+        import json
+        import tempfile
+
+        result = {
+            "metadata": {"as_of": "2026-08-03", "model_id": "defensive_value"},
+            "config": {
+                "report": {"focus_size": 20, "watchlist_size": 100},
+                "hard_gates": {"min_avg_daily_turnover_twd": 50_000_000},
             },
-            "config": {"report": {"focus_size": 20, "watchlist_size": 100}},
             "checks": [],
-            "results": results,
+            "results": [{
+                "rank": 1, "stock_id": "2330", "stock_name": "台積電", "hard_pass": True,
+                "total_score": 70.0, "industry": "半導體業",
+            }],
         }
-        page = _build_html(
-            payload,
-            enrichment={"0001": {"technical": "中性", "chip": "待觀察"}},
-        )
-        self.assertIn("scorebar", page)
-        self.assertIn("展開自選100第 21–100 名（1 檔）", page)
-        self.assertIn("data-sort", page)
-        self.assertIn("中性", page)
-        self.assertIn("台股防禦價值篩選", page)
-        self.assertIn("本益比", page)
-        self.assertIn("本淨比", page)
-        self.assertIn("技術面、籌碼面與模型短評", page)
-        self.assertIn("20日均量（張）", page)
-        self.assertNotIn("<th data-type=\"text\">治理</th>", page)
-        self.assertNotIn("cdn", page.lower())
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            paths = write_reports(result, root)
+            self.assertEqual(set(paths), {"json", "csv"})
+            self.assertFalse((root / "2026-08-03" / "screening_report.html").exists())
+            self.assertFalse((root / "latest" / "screening_report.html").exists())
+            self.assertTrue((root / "latest" / "screening_results.json").exists())
+            self.assertTrue((root / "latest" / "screening_results.csv").exists())
+            saved = json.loads((root / "latest" / "screening_results.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["results"][0]["stock_id"], "2330")
 
 
 if __name__ == "__main__":
