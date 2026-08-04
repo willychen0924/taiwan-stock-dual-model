@@ -280,7 +280,7 @@ def build_combined_html(
     <div class="tabs">
       <label for="t-momentum">營運動能</label>
       <label for="t-value">防禦價值</label>
-      <label for="t-inter">雙模型交集</label>
+      <label for="t-inter">總覽</label>
     </div>
     {navigation}
   </div>

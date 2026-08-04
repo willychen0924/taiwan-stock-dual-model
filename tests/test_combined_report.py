@@ -81,6 +81,8 @@ class CombinedReportTests(unittest.TestCase):
         """分頁與逐列展開必須是原生行為：禁用 script 的環境仍要能用。"""
         page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
         self.assertNotIn("<script", page)
+        self.assertIn('<label for="t-inter">總覽</label>', page)
+        self.assertNotIn('<label for="t-inter">雙模型交集</label>', page)
         for key in ("t-momentum", "t-value", "t-inter"):
             self.assertIn(f'id="{key}" class="tabin"', page)
         # 預設停在營運動能
