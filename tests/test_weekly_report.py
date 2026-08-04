@@ -14,6 +14,7 @@ from value_screener.weekly_report import (  # noqa: E402
     completed_week_window,
     last_eligible_by_market_date,
     longest_version_segment,
+    market_focus_block,
 )
 
 
@@ -40,6 +41,34 @@ def record(model_id: str, market_date: str, *, version: str | None = "0.2.0", el
 
 
 class WeeklyReportTests(unittest.TestCase):
+    def test_market_focus_renders_sources_and_keeps_news_separate_from_model(self) -> None:
+        context = {
+            "market_environment": {
+                "summary": "櫃買弱於加權，風險偏好下降。",
+                "source": {"label": "市場資料", "url": "https://example.com/market"},
+            },
+            "industry_theme": {
+                "summary": "晶片股由動能交易轉向風險檢驗。",
+                "news": [{
+                    "date": "2026-07-29",
+                    "source": "測試來源",
+                    "title": "晶片股新聞",
+                    "url": "https://example.com/news",
+                    "summary": "AI 資本支出成為焦點。",
+                }],
+            },
+            "model_alignment": {"summary": "模型仍集中半導體，但不代表風險消失。"},
+            "disclaimer": "新聞只供研究呈現，不進模型。",
+        }
+        block = market_focus_block(context)
+        self.assertIn("本週市場焦點", block)
+        self.assertIn("市場環境", block)
+        self.assertIn('href="https://example.com/market"', block)
+        self.assertIn("晶片股新聞", block)
+        self.assertIn("AI 資本支出成為焦點", block)
+        self.assertIn("模型仍集中半導體", block)
+        self.assertIn("不進模型", block)
+
     def test_completed_week_uses_previous_week_on_monday(self) -> None:
         records = [record("defensive_value", "2026-07-31")]
         self.assertEqual(completed_week_window(records, as_of=date(2026, 8, 3)), (date(2026, 7, 27), date(2026, 7, 31)))

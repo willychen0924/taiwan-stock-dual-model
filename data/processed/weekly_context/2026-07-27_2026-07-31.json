@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "week_start": "2026-07-27",
+  "week_end": "2026-07-31",
+  "generated_on": "2026-08-04",
+  "market_environment": {
+    "summary": "本週先急跌後反彈，加權報酬指數週跌 1.2%，櫃買報酬指數週跌 7.8%；中小型股明顯弱於大型權值，顯示風險偏好仍低。週五雖出現強彈，但尚未收復週中跌幅。",
+    "source": {
+      "label": "FinMind 加權／櫃買報酬指數",
+      "url": "https://finmind.github.io/tutor/TaiwanMarket/Technical/"
+    },
+    "metrics": {
+      "taiex_week_return": -0.0116,
+      "tpex_week_return": -0.0781,
+      "taiex_friday_rebound": 0.0798,
+      "tpex_friday_rebound": 0.0664
+    }
+  },
+  "industry_theme": {
+    "summary": "市場主線由追逐 AI 與記憶體成長，轉向檢驗估值、資本支出效率與中國競爭風險；月底晶片股反彈，顯示長線需求敘事尚未消失，但短線風險溢價已明顯升高。",
+    "news": [
+      {
+        "date": "2026-07-28",
+        "source": "公視新聞網",
+        "title": "台股開盤一度大跌1900點 日韓股市同步重挫",
+        "url": "https://news.pts.org.tw/article/819699",
+        "summary": "全球晶片與記憶體賣壓擴散至亞股，台灣記憶體、被動元件與半導體成為主要震盪來源。"
+      },
+      {
+        "date": "2026-07-29",
+        "source": "Axios",
+        "title": "投資人開始降溫紅熱的晶片股",
+        "url": "https://www.axios.com/2026/07/29/chips-stocks-ai-china",
+        "summary": "市場重新評估 AI 資本支出、自由現金流與中國競爭，半導體與記憶體由動能交易轉向風險檢驗。"
+      },
+      {
+        "date": "2026-07-30",
+        "source": "AP",
+        "title": "微軟財報帶動美股與晶片股反彈",
+        "url": "https://apnews.com/article/stock-markets-rates-korea-ai-oil-99b5702d93a2b5c6e513fb952ccdcc92",
+        "summary": "AI 投資轉化為獲利的訊號帶動科技與晶片股回升，但通膨及長天期利率仍限制風險偏好。"
+      }
+    ]
+  },
+  "model_alignment": {
+    "summary": "兩套模型期末精華20仍以半導體為最大產業，與本週波動最劇烈的市場主題高度重疊；防禦價值更集中半導體，營運動能則延伸至電子零組件與電腦周邊。這表示候選股基本面與估值條件仍成立，不代表產業波動風險已消失。"
+  },
+  "disclaimer": "市場新聞與宏觀脈絡只供研究呈現，不進入模型分數、硬門檻、模型狀態或排名歷史。"
+}

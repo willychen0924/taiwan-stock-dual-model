@@ -33,6 +33,87 @@ def load_history(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def load_weekly_context(
+    path: Path,
+    *,
+    week_start: date,
+    week_end: date,
+) -> dict[str, Any] | None:
+    """Load the optional, human-auditable market context for one report week."""
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    expected = (week_start.isoformat(), week_end.isoformat())
+    actual = (str(payload.get("week_start") or ""), str(payload.get("week_end") or ""))
+    if actual != expected:
+        raise ValueError(
+            f"週市場脈絡日期不符：預期 {expected[0]}～{expected[1]}，"
+            f"實際 {actual[0]}～{actual[1]}"
+        )
+    return payload
+
+
+def _safe_http_url(value: Any) -> str:
+    url = str(value or "").strip()
+    return url if url.startswith(("https://", "http://")) else ""
+
+
+def market_focus_block(context: dict[str, Any] | None) -> str:
+    """Render research context without feeding it back into model calculations."""
+    if not context:
+        return ""
+
+    market = context.get("market_environment") or {}
+    theme = context.get("industry_theme") or {}
+    alignment = context.get("model_alignment") or {}
+
+    market_summary = html.escape(str(market.get("summary") or "—"))
+    source = market.get("source") or {}
+    source_url = _safe_http_url(source.get("url"))
+    source_label = html.escape(str(source.get("label") or "資料來源"))
+    source_link = (
+        f'<a class="focus-source" href="{html.escape(source_url, quote=True)}" '
+        f'target="_blank" rel="noopener noreferrer">{source_label}</a>'
+        if source_url else ""
+    )
+
+    news_rows: list[str] = []
+    for item in list(theme.get("news") or [])[:5]:
+        url = _safe_http_url(item.get("url"))
+        title = html.escape(str(item.get("title") or "未命名新聞"))
+        title_html = (
+            f'<a href="{html.escape(url, quote=True)}" target="_blank" '
+            f'rel="noopener noreferrer">{title}</a>'
+            if url else f"<span>{title}</span>"
+        )
+        meta = " · ".join(
+            html.escape(str(value))
+            for value in (item.get("date"), item.get("source"))
+            if value
+        )
+        news_rows.append(
+            "<li>"
+            f'<span class="news-meta">{meta}</span>{title_html}'
+            f'<small>{html.escape(str(item.get("summary") or ""))}</small>'
+            "</li>"
+        )
+    news_block = f'<ul class="focus-news">{"".join(news_rows)}</ul>' if news_rows else ""
+    disclaimer = html.escape(str(context.get("disclaimer") or ""))
+
+    return (
+        '<section class="summary market-focus"><h2>本週市場焦點</h2>'
+        '<div class="focus-row"><div class="focus-label">市場環境</div>'
+        f'<div class="focus-copy"><p>{market_summary}{source_link}</p></div></div>'
+        '<div class="focus-row"><div class="focus-label">產業主題</div>'
+        f'<div class="focus-copy"><p>{html.escape(str(theme.get("summary") or "—"))}</p>'
+        f'{news_block}</div></div>'
+        '<div class="focus-row"><div class="focus-label">模型對照</div>'
+        f'<div class="focus-copy"><p>{html.escape(str(alignment.get("summary") or "—"))}</p></div></div>'
+        + (f'<p class="focus-disclaimer">{disclaimer}</p>' if disclaimer else "")
+        + "</section>"
+    )
+
+
 def completed_week_window(records: Iterable[dict[str, Any]], *, as_of: date) -> tuple[date, date]:
     market_dates = sorted(
         date.fromisoformat(str(record["latest_market_date"]))
@@ -392,6 +473,7 @@ def build_weekly_html(
     week_start: date,
     week_end: date,
     manual_review: dict[str, dict[str, str]] | None = None,
+    market_context: dict[str, Any] | None = None,
 ) -> str:
     manual_review = manual_review or {}
     selected_by_model: dict[str, list[dict[str, Any]]] = {}
@@ -593,9 +675,10 @@ def build_weekly_html(
         )
     if version_changes:
         summary_bits.append("本週模型版本有變動，跨版本區間已排除。")
-    summary_block = (
+    fallback_summary_block = (
         '<section class="summary"><h2>本週摘要</h2><p>' + " ".join(summary_bits) + "</p></section>"
     )
+    summary_block = market_focus_block(market_context) or fallback_summary_block
 
     navigation = period_navigation(
         "weekly",
@@ -708,6 +791,28 @@ def build_weekly_html(
 .summary h2{margin:0 0 6px;font-size:11.5px;color:var(--ink2);font-weight:700;letter-spacing:.5px}
 .summary p{margin:0;font-size:13.5px;line-height:1.85;color:var(--ink)}
 .summary b{font-variant-numeric:tabular-nums}
+.market-focus{padding:0;overflow:hidden}
+.market-focus>h2{margin:0;padding:13px 20px 10px;border-bottom:1px solid var(--line2)}
+.focus-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:16px;padding:11px 20px}
+.focus-row+.focus-row{border-top:1px solid var(--line2)}
+.focus-label{font-size:11.5px;font-weight:700;color:var(--ink2);letter-spacing:.3px;padding-top:2px}
+.focus-copy p{margin:0;font-size:13.5px;line-height:1.75;color:var(--ink)}
+.focus-source{font-size:11px;margin-left:7px;color:var(--link);white-space:nowrap;text-decoration:none}
+.focus-source:hover{text-decoration:underline}
+.focus-news{list-style:none;margin:8px 0 0;padding:0;border-top:1px dotted var(--rule)}
+.focus-news li{display:grid;grid-template-columns:118px minmax(220px,.75fr) minmax(260px,1.25fr);
+ gap:10px;padding:7px 0;border-bottom:1px dotted var(--rule);align-items:baseline}
+.focus-news li:last-child{border-bottom:0;padding-bottom:0}
+.focus-news a{color:var(--link);text-decoration:none;font-size:12.5px;font-weight:600}
+.focus-news a:hover{text-decoration:underline}
+.focus-news small{font-size:11.5px;line-height:1.55;color:var(--muted)}
+.news-meta{font-size:11px;color:var(--muted);white-space:nowrap}
+.focus-disclaimer{margin:0!important;padding:8px 20px;border-top:1px solid var(--line2);
+ font-size:10.5px!important;line-height:1.55!important;color:var(--muted)!important}
+@media(max-width:900px){
+ .focus-row{grid-template-columns:1fr;gap:5px}
+ .focus-news li{grid-template-columns:1fr;gap:3px}
+}
 .weekly-chip small{margin-left:5px;font-size:11px}
 
 td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
@@ -772,7 +877,8 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
 )}
 </section>
 
-<p class="foot">本報告只由 rankings_history.jsonl 產生，不依賴 14 天內清除的 reports 目錄。
+<p class="foot">模型排名區塊由 rankings_history.jsonl 產生；本週市場焦點另讀取已保存的週市場脈絡檔。
+兩者均不依賴 14 天內清除的 reports 目錄。
 每個市場日取檔案中最後一份有效版本；跨版本區間分開處理。
 量化排名只負責縮小研究範圍，不是買進建議。</p>
 </div></body></html>"""
@@ -785,6 +891,7 @@ def write_weekly_report(
     week_start: date,
     week_end: date,
     manual_review: dict[str, dict[str, str]] | None = None,
+    market_context: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     label = f"{week_start.isoformat()}_{week_end.isoformat()}"
     dated_dir = reports_root / "weekly" / label
@@ -794,7 +901,13 @@ def write_weekly_report(
     dated_path = dated_dir / "index.html"
     latest_path = latest_dir / "index.html"
     dated_path.write_text(
-        build_weekly_html(records, week_start=week_start, week_end=week_end, manual_review=manual_review),
+        build_weekly_html(
+            records,
+            week_start=week_start,
+            week_end=week_end,
+            manual_review=manual_review,
+            market_context=market_context,
+        ),
         encoding="utf-8",
     )
     shutil.copy2(dated_path, latest_path)
