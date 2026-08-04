@@ -504,7 +504,7 @@ def build_weekly_html(
             lines.append(
                 f'<div class="ibar"><span class="iname">{html.escape(name)}</span>'
                 f'<span class="itrack"><i style="width:{count / top:.0%}"></i></span>'
-                f'<span class="icount">{count}{delta}</span></div>'
+                f'<span class="icount">{count} 檔{delta}</span></div>'
             )
         caption = label + ("" if before else "　<small class=\"dim\">上週無有效觀測</small>")
         industry_blocks.append(f'<div><div class="subcap">{caption}</div>{"".join(lines)}</div>')
@@ -652,12 +652,15 @@ def build_weekly_html(
 .itrack i{display:block;height:100%;background:var(--active);opacity:.45}
 .icount{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink)}
 .icount small{margin-left:4px;font-weight:600}
-.industry-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:36px;
+.industry-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;
  padding:3px 0 5px}
+.industry-grid>div:first-child{padding-right:32px}
+.industry-grid>div:last-child{padding-left:32px;border-left:1px solid var(--line2)}
 .industry-grid .subcap{padding:0 0 9px;font-size:13px}
-.industry-grid .ibar{grid-template-columns:minmax(120px,150px) 1fr 50px;gap:12px;
+.industry-grid .ibar{grid-template-columns:minmax(120px,150px) 1fr 64px;gap:12px;
  padding:6px 0;font-size:13.5px;line-height:1.4}
 .industry-grid .itrack{height:8px}
+.industry-grid .icount{white-space:nowrap}
 .intersection-days{margin:6px -18px -17px;border-top:1px solid var(--line2)}
 .intersection-days>summary{list-style:none;cursor:pointer;padding:7px 18px;color:var(--ink2);
  font-size:12px;font-weight:700}
@@ -673,7 +676,11 @@ def build_weekly_html(
 .intersection-days .weekly-chip{padding:2px 7px;margin:0 4px 0 0;font-size:12px;vertical-align:middle}
 .intersection-note{margin:2px 0 0;color:var(--muted);font-size:11.5px}
 
-@media(max-width:900px){.cols2,.cols2.tight,.industry-grid{grid-template-columns:1fr;gap:18px 0}}
+@media(max-width:900px){
+ .cols2,.cols2.tight,.industry-grid{grid-template-columns:1fr;gap:18px 0}
+ .industry-grid>div:first-child{padding-right:0}
+ .industry-grid>div:last-child{padding:18px 0 0;border-left:0;border-top:1px solid var(--line2)}
+}
 /* 警示色與日報一致；整個系統只有一種警報色，異常的辨識度才不會隨頁面浮動 */
 .weekly-warning{margin:14px 0;background:rgba(208,59,59,.07);border-left:4px solid #d03b3b;
  border-radius:9px;padding:12px 15px;color:#a8331f;line-height:1.75;font-size:12.5px}

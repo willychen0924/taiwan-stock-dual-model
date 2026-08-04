@@ -86,6 +86,8 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn("精華20產業分布", page)
         self.assertIn('class="industry-grid"', page)
         self.assertIn(".industry-grid .ibar{grid-template-columns:minmax(120px,150px)", page)
+        self.assertIn(".industry-grid>div:last-child{padding-left:32px;border-left:1px", page)
+        self.assertIn('<span class="icount">1 檔</span>', page)
         self.assertIn("人工複核進度", page)
         self.assertNotIn("分數組成變化", page)  # 週內幾乎只有估值區塊會動，三欄裡兩欄恆為 0
         self.assertIn("精華20名單變動", page)
