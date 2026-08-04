@@ -17,17 +17,6 @@ from typing import Any
 # 色相是次要線索，兩色明度相近時無論色相差多少都難以區分。
 SCORE_COLORS = {"first": "#5c9b62", "second": "#1e5fae", "third": "#eb6834"}
 
-# 各分頁的頁面底色。明度與彩度相同（L*≈97、C*≈3.8），只有色相不同——
-# 切換分頁時底色會換一個色系，但不會有一頁看起來比較亮或比較暗。
-# radio 在 .wrap 內，CSS 的 ~ 選擇器碰不到 body，因此改用一層固定定位的
-# .pagebg 承接背景色。
-PAGE_TINTS = {
-    "momentum": "var(--page)",   # 暖石陶土 88°
-    "value": "#eff8fd",      # 冷石灰藍 238°
-    "overview": "#eff9f6",   # 霧綠 178°（雙模型交集）
-    "weekly": "#f8f5fc",     # 淡紫灰 308°（整份週報）
-}
-
 # 欄寬依標題字數估算（11.5px 粗體，中文約 11.5px、拉丁約 6px，色點另計 13px）。
 COLS_VALUE = "40px 50px 62px 90px 94px 106px 64px 78px 78px 78px 78px 78px 68px 70px"
 COLS_MOMENTUM = COLS_VALUE
@@ -160,27 +149,18 @@ def portal_css() -> str:
     first, second, third = SCORE_COLORS["first"], SCORE_COLORS["second"], SCORE_COLORS["third"]
     model_cols, inter_cols = COLS_VALUE, COLS_INTERSECTION
     model_min, inter_min = grid_min_width(COLS_VALUE), grid_min_width(COLS_INTERSECTION)
-    page_default = PAGE_TINTS["momentum"]
-    tint_momentum, tint_value = PAGE_TINTS["momentum"], PAGE_TINTS["value"]
-    tint_overview, tint_weekly = PAGE_TINTS["overview"], PAGE_TINTS["weekly"]
     return theme_css() + f"""
 *{{box-sizing:border-box}}
-body{{margin:0;background:{page_default};color:var(--ink);font-size:13px;
+body{{margin:0;background:var(--page);color:var(--ink);font-size:13px;
  font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Segoe UI",sans-serif;
  -webkit-font-smoothing:antialiased}}
 .wrap{{max-width:1500px;margin:0 auto;padding:18px 22px 48px}}
 
 /* 分頁控制項：必須與面板、狀態區同層，否則 ~ 選擇器跨不過去 */
 .tabin{{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}}
-/* 底色圖層：radio 碰不到 body，改由這層承接，切換分頁時換色系 */
-.pagebg{{position:fixed;inset:0;z-index:-1;background:{page_default};transition:background .2s}}
-/* 日報：底色隨模型分頁換色系。週報：整份一色，與日報明顯區隔 */
-#t-momentum:checked ~ .pagebg{{background:{tint_momentum}}}
-#t-value:checked    ~ .pagebg{{background:{tint_value}}}
-#t-inter:checked    ~ .pagebg{{background:{tint_overview}}}
-#w-overview:checked ~ .pagebg,
-#w-value:checked    ~ .pagebg,
-#w-momentum:checked ~ .pagebg{{background:{tint_weekly}}}
+/* 底色圖層：radio 碰不到 body，改由這層承接。底色只由主題變數決定——
+   日報一色、週報一色，模型分頁之間不換色。 */
+.pagebg{{position:fixed;inset:0;z-index:-1;background:var(--page);transition:background .2s}}
 
 .head{{background:var(--surface);border:1px solid var(--line);border-radius:16px;
  padding:0 24px 4px;overflow:hidden;
