@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,7 +9,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from value_screener.combined_report import build_combined_html  # noqa: E402
+from value_screener.combined_report import (  # noqa: E402
+    build_combined_html,
+    write_combined_report,
+)
 
 
 def _result(model_id: str, *, status: str = "OK") -> dict:
@@ -93,6 +97,19 @@ class CombinedReportTests(unittest.TestCase):
         )
         self.assertIn("本次不產生雙模型交集", page)
         self.assertIn("資料不可比", page)
+
+    def test_portal_is_written_only_as_index_html(self) -> None:
+        """入口頁只有一個路徑：同內容再存一份 combined_report.html 沒有人連。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            paths = write_combined_report(
+                _result("defensive_value"), _result("operating_momentum"), root
+            )
+            self.assertEqual(set(paths), {"index_html", "latest_index_html"})
+            self.assertEqual(
+                sorted(path.relative_to(root).as_posix() for path in root.rglob("*.html")),
+                ["2026-08-03/index.html", "latest/index.html"],
+            )
 
     def test_weekly_navigation_is_enabled_only_when_available(self) -> None:
         disabled = build_combined_html(_result("defensive_value"), _result("operating_momentum"))

@@ -328,8 +328,8 @@ def write_combined_report(
     latest_dir = reports_root / "latest"
     dated_dir.mkdir(parents=True, exist_ok=True)
     latest_dir.mkdir(parents=True, exist_ok=True)
-    dated_path = dated_dir / "combined_report.html"
-    latest_path = latest_dir / "combined_report.html"
+    # 只寫 index.html：目錄一開就是入口頁，另存一份同內容的 combined_report.html
+    # 只會多一個沒人連的路徑。
     index_path = dated_dir / "index.html"
     latest_index_path = latest_dir / "index.html"
     page = build_combined_html(
@@ -339,8 +339,6 @@ def write_combined_report(
         history_path=history_path,
         weekly_available=weekly_available,
     )
-    dated_path.write_text(page, encoding="utf-8")
     index_path.write_text(page, encoding="utf-8")
-    shutil.copy2(dated_path, latest_path)
     shutil.copy2(index_path, latest_index_path)
-    return {"html": dated_path, "latest_html": latest_path, "index_html": index_path, "latest_index_html": latest_index_path}
+    return {"index_html": index_path, "latest_index_html": latest_index_path}
