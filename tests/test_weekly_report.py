@@ -94,11 +94,9 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn('<b class="out">移出</b>', page)
         self.assertIn("在榜／連續", page)
         self.assertIn(">2／2</td>", page)
-        self.assertIn(
-            '<details class="intersection-days"><summary>各市場日交集（2 個有效日）</summary>',
-            page,
-        )
-        self.assertNotIn('<details class="intersection-days" open>', page)
+        self.assertNotIn("部分天數", page)
+        self.assertIn("2 個有效市場日的交集名單相同。", page)
+        self.assertNotIn('<details class="intersection-days">', page)
         self.assertIn('▲ 上升最多', page)
         self.assertIn('▼ 下降最多', page)
         self.assertNotIn("期初至期末淨進出", page)
@@ -175,6 +173,30 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertEqual(days, 2)
         self.assertEqual([item["stock_id"] for item in always], ["1111"])
         self.assertEqual([(item["stock_id"], n) for item, n in partial], [("2222", 1)])
+
+    def test_intersection_daily_details_group_identical_periods(self) -> None:
+        records = []
+        for market_date, stock_id in [
+            ("2026-07-27", "1111"),
+            ("2026-07-28", "1111"),
+            ("2026-07-29", "2222"),
+        ]:
+            for model_id in ["defensive_value", "operating_momentum"]:
+                item = record(model_id, market_date)
+                item["rankings"][0]["stock_id"] = stock_id
+                item["rankings"][0]["stock_name"] = f"公司{stock_id}"
+                records.append(item)
+        page = build_weekly_html(
+            records,
+            week_start=date(2026, 7, 27),
+            week_end=date(2026, 7, 31),
+        )
+        self.assertIn(
+            '<details class="intersection-days"><summary>交集名單變化（3 個有效日／2 個區間）</summary>',
+            page,
+        )
+        self.assertIn("2026-07-27～2026-07-28", page)
+        self.assertIn("2026-07-29", page)
 
     def test_manual_review_progress_counts_only_decided_rows(self) -> None:
         from value_screener.weekly_report import manual_review_progress

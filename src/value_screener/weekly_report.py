@@ -416,15 +416,37 @@ def build_weekly_html(
 
     value_by_date = {str(record["latest_market_date"]): record for record in selected_by_model["defensive_value"]}
     momentum_by_date = {str(record["latest_market_date"]): record for record in selected_by_model["operating_momentum"]}
-    intersection_rows: list[str] = []
+    intersection_snapshots: list[tuple[str, list[dict[str, Any]]]] = []
     for market_date in sorted(value_by_date.keys() & momentum_by_date.keys()):
         value_top = _top(value_by_date[market_date])
         momentum_top = _top(momentum_by_date[market_date])
         common = [value_top[key] for key in value_top if key in momentum_top]
+        intersection_snapshots.append((market_date, common))
+
+    intersection_groups: list[dict[str, Any]] = []
+    for market_date, common in intersection_snapshots:
+        key = tuple(sorted(str(item.get("stock_id") or "") for item in common))
+        if intersection_groups and intersection_groups[-1]["key"] == key:
+            intersection_groups[-1]["end"] = market_date
+            intersection_groups[-1]["days"] += 1
+            intersection_groups[-1]["items"] = common
+            continue
+        intersection_groups.append(
+            {"start": market_date, "end": market_date, "days": 1, "key": key, "items": common}
+        )
+
+    intersection_rows = []
+    for group in intersection_groups:
+        date_label = (
+            group["start"]
+            if group["start"] == group["end"]
+            else f'{group["start"]}～{group["end"]}'
+        )
         intersection_rows.append(
             "<tr>"
-            f'<td class="stock-id">{html.escape(market_date)}</td><td class="number">{len(common)}</td>'
-            f'<td class="grow">{_chips(common, "")}</td></tr>'
+            f'<td class="stock-id">{html.escape(date_label)}</td>'
+            f'<td class="number">{len(group["items"])}</td>'
+            f'<td class="grow">{_chips(group["items"], "")}</td></tr>'
         )
     intersection_body = "".join(intersection_rows) or '<tr><td colspan="3" class="dim">本週沒有可比較的雙模型有效市場日。</td></tr>'
 
@@ -434,17 +456,28 @@ def build_weekly_html(
         f'{html.escape(str(item.get("stock_name") or ""))}'
         f'<small class="dim"> {days}/{shared_days}日</small></span>'
         for item, days in partial
-    ) or '<span class="dim">—</span>'
-    persistence_block = (
-        f'<div class="inout"><div><b class="in">全週都在</b>{_chips(always, "in")}</div>'
-        f'<div><b class="out">部分天數</b>{partial_chips}</div></div>'
-        if shared_days else '<p class="dim">本週沒有共同的有效市場日。</p>'
     )
+    if not shared_days:
+        persistence_block = '<p class="dim">本週沒有共同的有效市場日。</p>'
+    elif not always and not partial:
+        persistence_block = f'<p class="dim">{shared_days} 個有效市場日均無雙模型交集。</p>'
+    else:
+        persistence_lines = []
+        if always:
+            persistence_lines.append(f'<div><b class="in">全週都在</b>{_chips(always, "in")}</div>')
+        if partial:
+            persistence_lines.append(f'<div><b class="out">部分天數</b>{partial_chips}</div>')
+        persistence_block = f'<div class="inout">{"".join(persistence_lines)}</div>'
+        if len(intersection_groups) == 1 and shared_days > 1:
+            persistence_block += (
+                f'<p class="intersection-note">{shared_days} 個有效市場日的交集名單相同。</p>'
+            )
     intersection_days_block = (
-        f'<details class="intersection-days"><summary>各市場日交集（{shared_days} 個有效日）</summary>'
+        f'<details class="intersection-days"><summary>交集名單變化（{shared_days} 個有效日／'
+        f'{len(intersection_groups)} 個區間）</summary>'
         '<div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th>'
         f'<th class="grow">標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div></details>'
-        if shared_days else ""
+        if len(intersection_groups) > 1 else ""
     )
 
     prior_start, prior_end = prior_week_window(week_start, week_end)
@@ -632,6 +665,7 @@ def build_weekly_html(
 .intersection-days>summary:after{content:"▾";margin-left:7px;color:var(--muted)}
 .intersection-days[open]>summary:after{content:"▴"}
 .intersection-days .tablewrap{margin:0;border-top:1px solid var(--line2)}
+.intersection-note{margin:2px 0 0;color:var(--muted);font-size:11.5px}
 
 @media(max-width:900px){.cols2,.cols2.tight,.industry-grid{grid-template-columns:1fr;gap:18px 0}}
 /* 警示色與日報一致；整個系統只有一種警報色，異常的辨識度才不會隨頁面浮動 */
