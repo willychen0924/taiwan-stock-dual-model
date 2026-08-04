@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from value_screener.config import load_manual_review  # noqa: E402
 from value_screener.weekly_report import completed_week_window, load_history, write_weekly_report  # noqa: E402
 
 
@@ -38,7 +39,13 @@ def main() -> int:
         except ValueError as exc:
             print(f"[週報略過] {exc}", flush=True)
             return 0
-    paths = write_weekly_report(records, ROOT / "reports", week_start=week_start, week_end=week_end)
+    paths = write_weekly_report(
+        records,
+        ROOT / "reports",
+        week_start=week_start,
+        week_end=week_end,
+        manual_review=load_manual_review(ROOT / "config" / "manual_review.csv"),
+    )
     for name, path in paths.items():
         print(f"[週報] {name}: {path}", flush=True)
     return 0

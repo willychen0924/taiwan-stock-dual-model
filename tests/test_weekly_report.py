@@ -74,7 +74,11 @@ class WeeklyReportTests(unittest.TestCase):
             records.extend([record("defensive_value", market_date), record("operating_momentum", market_date)])
         page = build_weekly_html(records, week_start=date(2026, 7, 27), week_end=date(2026, 7, 31))
         self.assertIn("資料品質", page)
-        self.assertIn("雙模型交集逐日變化", page)
+        self.assertIn("雙模型交集", page)
+        self.assertIn("本週摘要", page)
+        self.assertIn("較上週變化", page)
+        self.assertIn("精華20產業分布", page)
+        self.assertIn("人工複核進度", page)
         self.assertIn("分數組成變化", page)
         self.assertIn("精華20名單變動", page)
         self.assertNotIn("週初 vs 週末", page)
@@ -130,6 +134,48 @@ class WeeklyReportTests(unittest.TestCase):
         panels = [page.index(f'id="weekly-{key}"') for key in
                   ("operating_momentum", "defensive_value", "overview")]
         self.assertEqual(panels, sorted(panels))
+
+
+    def test_week_over_week_needs_same_model_version(self) -> None:
+        """跨版本的週對週差異同時含市場與模型變動，不可歸因，因此不計算。"""
+        from value_screener.weekly_report import week_over_week
+        same = [record("defensive_value", "2026-07-20"), record("defensive_value", "2026-07-27")]
+        result = week_over_week(same, model_id="defensive_value",
+                                week_start=date(2026, 7, 27), week_end=date(2026, 7, 31))
+        self.assertTrue(result["comparable"])
+        self.assertEqual([item["stock_id"] for item in result["stayed"]], ["2330"])
+
+        crossed = [record("defensive_value", "2026-07-20", version="0.1.0"),
+                   record("defensive_value", "2026-07-27", version="0.2.0")]
+        result = week_over_week(crossed, model_id="defensive_value",
+                                week_start=date(2026, 7, 27), week_end=date(2026, 7, 31))
+        self.assertFalse(result["comparable"])
+        self.assertIn("跨版本不可比", result["reason"])
+
+    def test_intersection_splits_full_week_from_partial(self) -> None:
+        from value_screener.weekly_report import intersection_persistence
+        def rec(stock_ids):
+            return {"rankings": [{"stock_id": s, "stock_name": s, "rank": i + 1}
+                                 for i, s in enumerate(stock_ids)]}
+        value = {"2026-07-27": rec(["1111", "2222"]), "2026-07-28": rec(["1111", "3333"])}
+        momentum = {"2026-07-27": rec(["1111", "2222"]), "2026-07-28": rec(["1111"])}
+        always, partial, days = intersection_persistence(value, momentum)
+        self.assertEqual(days, 2)
+        self.assertEqual([item["stock_id"] for item in always], ["1111"])
+        self.assertEqual([(item["stock_id"], n) for item, n in partial], [("2222", 1)])
+
+    def test_manual_review_progress_counts_only_decided_rows(self) -> None:
+        from value_screener.weekly_report import manual_review_progress
+        review = {
+            "1111": {"governance_status": "通過"},
+            "2222": {"governance_status": "待複核"},
+            "3333": {"governance_status": ""},
+        }
+        progress = manual_review_progress(review, {"1111", "2222", "4444"})
+        self.assertEqual(progress["filled"], 3)
+        self.assertEqual(progress["reviewed"], 1)
+        self.assertEqual(progress["focus_total"], 3)
+        self.assertEqual(progress["focus_reviewed"], 1)
 
 
 if __name__ == "__main__":

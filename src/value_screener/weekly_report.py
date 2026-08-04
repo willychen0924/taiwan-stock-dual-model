@@ -151,6 +151,99 @@ def _longest_streak(presence: list[bool]) -> int:
     return best
 
 
+# ── 週對週、產業分布、交集延續性、人工複核進度 ───────────────────────────
+
+def prior_week_window(week_start: date, week_end: date) -> tuple[date, date]:
+    return week_start - timedelta(days=7), week_end - timedelta(days=7)
+
+
+def week_over_week(
+    records: list[dict[str, Any]],
+    *,
+    model_id: str,
+    week_start: date,
+    week_end: date,
+) -> dict[str, Any]:
+    """比較本週末與上週末的精華20。跨模型版本時不做比較——名次差異會同時
+    包含市場變動與模型變動，無法歸因。"""
+    this_week, _ = last_eligible_by_market_date(
+        records, model_id=model_id, week_start=week_start, week_end=week_end
+    )
+    prior_start, prior_end = prior_week_window(week_start, week_end)
+    prior_week, _ = last_eligible_by_market_date(
+        records, model_id=model_id, week_start=prior_start, week_end=prior_end
+    )
+    if not this_week or not prior_week:
+        return {"comparable": False, "reason": "上一週沒有有效觀測"}
+    current, previous = this_week[-1], prior_week[-1]
+    if current.get("config_version") != previous.get("config_version"):
+        return {
+            "comparable": False,
+            "reason": (
+                f"上週為 {_version_label(previous.get('config_version'))}，"
+                f"本週為 {_version_label(current.get('config_version'))}，跨版本不可比"
+            ),
+        }
+    current_top, previous_top = _top(current), _top(previous)
+    stayed = [current_top[key] for key in current_top if key in previous_top]
+    entered = [current_top[key] for key in current_top if key not in previous_top]
+    left = [previous_top[key] for key in previous_top if key not in current_top]
+    return {
+        "comparable": True,
+        "prior_market_date": str(previous.get("latest_market_date") or ""),
+        "market_date": str(current.get("latest_market_date") or ""),
+        "stayed": sorted(stayed, key=lambda item: int(item["rank"])),
+        "entered": sorted(entered, key=lambda item: int(item["rank"])),
+        "left": sorted(left, key=lambda item: int(item["rank"])),
+    }
+
+
+def industry_mix(record: dict[str, Any] | None, size: int = 20) -> dict[str, int]:
+    if not record:
+        return {}
+    counts: dict[str, int] = defaultdict(int)
+    for item in record.get("rankings", [])[:size]:
+        counts[str(item.get("industry") or "未分類")] += 1
+    return dict(sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])))
+
+
+def intersection_persistence(
+    value_by_date: dict[str, dict[str, Any]],
+    momentum_by_date: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], int]], int]:
+    """回傳（全週都在的、只出現部分天數的（含天數）、共同有效市場日數）。"""
+    shared_dates = sorted(value_by_date.keys() & momentum_by_date.keys())
+    appearances: dict[str, list[Any]] = defaultdict(list)
+    for market_date in shared_dates:
+        value_top = _top(value_by_date[market_date])
+        momentum_top = _top(momentum_by_date[market_date])
+        for stock_id in value_top.keys() & momentum_top.keys():
+            appearances[stock_id].append(value_top[stock_id])
+    total = len(shared_dates)
+    always = [items[-1] for items in appearances.values() if len(items) == total and total]
+    partial = [(items[-1], len(items)) for items in appearances.values() if 0 < len(items) < total]
+    always.sort(key=lambda item: int(item["rank"]))
+    partial.sort(key=lambda pair: (-pair[1], int(pair[0]["rank"])))
+    return always, partial, total
+
+
+def manual_review_progress(
+    manual_review: dict[str, dict[str, str]],
+    focus_ids: set[str],
+) -> dict[str, int]:
+    reviewed = {
+        stock_id
+        for stock_id, row in manual_review.items()
+        if (row.get("governance_status") or "").strip() not in ("", "待複核")
+    }
+    return {
+        "filled": len(manual_review),
+        "reviewed": len(reviewed),
+        "focus_total": len(focus_ids),
+        "focus_reviewed": len(focus_ids & reviewed),
+    }
+
+
 def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
     label = MODEL_LABELS[model_id]
     segment, segments = longest_version_segment(selected)
@@ -241,7 +334,9 @@ def build_weekly_html(
     *,
     week_start: date,
     week_end: date,
+    manual_review: dict[str, dict[str, str]] | None = None,
 ) -> str:
+    manual_review = manual_review or {}
     selected_by_model: dict[str, list[dict[str, Any]]] = {}
     invalid_by_model: dict[str, list[tuple[str, list[str]]]] = {}
     for model_id in MODEL_LABELS:
@@ -276,6 +371,79 @@ def build_weekly_html(
         )
     intersection_body = "".join(intersection_rows) or '<tr><td colspan="3" class="dim">本週沒有可比較的雙模型有效市場日。</td></tr>'
 
+    always, partial, shared_days = intersection_persistence(value_by_date, momentum_by_date)
+    partial_chips = "".join(
+        f'<span class="weekly-chip"><b>{html.escape(str(item.get("stock_id") or ""))}</b> '
+        f'{html.escape(str(item.get("stock_name") or ""))}'
+        f'<small class="dim"> {days}/{shared_days}日</small></span>'
+        for item, days in partial
+    ) or '<span class="dim">—</span>'
+    persistence_block = (
+        f'<div class="inout"><div><b class="in">全週都在</b>{_chips(always, "in")}</div>'
+        f'<div><b class="out">部分天數</b>{partial_chips}</div></div>'
+        if shared_days else '<p class="dim">本週沒有共同的有效市場日。</p>'
+    )
+
+    prior_start, prior_end = prior_week_window(week_start, week_end)
+    industry_rows: list[str] = []
+    for model_id, label in MODEL_LABELS.items():
+        selected = selected_by_model[model_id]
+        prior_selected, _ = last_eligible_by_market_date(
+            records, model_id=model_id, week_start=prior_start, week_end=prior_end
+        )
+        now = industry_mix(selected[-1] if selected else None)
+        before = industry_mix(prior_selected[-1] if prior_selected else None)
+        names = sorted(set(now) | set(before), key=lambda key: (-now.get(key, 0), key))
+        if not names:
+            industry_rows.append(f'<tr><td>{label}</td><td class="dim" colspan="2">本週沒有有效觀測</td></tr>')
+            continue
+        cells = "、".join(
+            f'{html.escape(name)} <b>{now.get(name, 0)}</b>'
+            + (
+                f'<small class="{"up" if now.get(name, 0) > before.get(name, 0) else "out"}">'
+                f'{now.get(name, 0) - before.get(name, 0):+d}</small>'
+                if before and now.get(name, 0) != before.get(name, 0) else ""
+            )
+            for name in names[:8]
+        )
+        industry_rows.append(
+            f'<tr><td>{label}</td><td>{cells}</td>'
+            f'<td class="dim">{"對照上週" if before else "上週無有效觀測"}</td></tr>'
+        )
+
+    wow_blocks: list[str] = []
+    for model_id, label in MODEL_LABELS.items():
+        wow = week_over_week(records, model_id=model_id, week_start=week_start, week_end=week_end)
+        if not wow["comparable"]:
+            wow_blocks.append(
+                f'<tr><td>{label}</td><td class="dim" colspan="4">不可比：{html.escape(wow["reason"])}</td></tr>'
+            )
+            continue
+        wow_blocks.append(
+            f'<tr><td>{label}</td>'
+            f'<td class="number">{len(wow["stayed"])}</td>'
+            f'<td class="number up">{len(wow["entered"])}</td>'
+            f'<td class="number out">{len(wow["left"])}</td>'
+            f'<td class="dim">{html.escape(wow["prior_market_date"])} → {html.escape(wow["market_date"])}</td></tr>'
+        )
+
+    focus_ids = {
+        str(item.get("stock_id"))
+        for selected in selected_by_model.values()
+        if selected
+        for item in selected[-1].get("rankings", [])[:20]
+    }
+    review = manual_review_progress(manual_review, focus_ids)
+    review_block = (
+        f'<p class="note">本週兩個模型精華20 合計 <b>{review["focus_total"]}</b> 檔，'
+        f'其中已完成治理複核 <b>{review["focus_reviewed"]}</b> 檔；'
+        f'config/manual_review.csv 累計 <b>{review["filled"]}</b> 筆、'
+        f'已定狀態 <b>{review["reviewed"]}</b> 筆。</p>'
+        + ('<div class="weekly-todo">質化複核尚未開始。量化排名只是研究漏斗；'
+           '未完成治理、護城河與催化查證前，精華20 仍只是待研究候選。</div>'
+           if review["focus_reviewed"] == 0 else "")
+    )
+
     version_changes: list[str] = []
     for model_id, selected in selected_by_model.items():
         versions = []
@@ -309,6 +477,35 @@ def build_weekly_html(
             f'<td>{used}</td><td class="dim">{others}</td></tr>'
         )
     has_change = bool(version_changes)
+    valid_counts = "／".join(
+        f"{label} {len(selected_by_model[model_id])}"
+        for model_id, label in MODEL_LABELS.items()
+    )
+    highlights: list[str] = []
+    for model_id, label in MODEL_LABELS.items():
+        wow = week_over_week(records, model_id=model_id, week_start=week_start, week_end=week_end)
+        if wow["comparable"]:
+            highlights.append(
+                f'{label}精華20 較上週留任 {len(wow["stayed"])}、'
+                f'新進 {len(wow["entered"])}、掉出 {len(wow["left"])}'
+            )
+        else:
+            highlights.append(f"{label}與上週不可比（{wow['reason']}）")
+    summary_bits = [
+        f'市場週 <b>{week_start}～{week_end}</b>，有效市場日 {valid_counts}。',
+        "；".join(highlights) + "。",
+    ]
+    if shared_days:
+        summary_bits.append(
+            f'雙模型交集共 <b>{len(always) + len(partial)}</b> 檔，'
+            f'其中 <b>{len(always)}</b> 檔全週都在。'
+        )
+    if version_changes:
+        summary_bits.append("本週模型版本有變動，跨版本區間已排除，詳見頁尾。")
+    summary_block = (
+        '<section class="summary"><h2>本週摘要</h2><p>' + " ".join(summary_bits) + "</p></section>"
+    )
+
     version_section = (
         '<div class="audit"><h2>模型版本與比較區間</h2>'
         + ('<p class="weekly-warning">本週模型版本有變動：'
@@ -355,6 +552,15 @@ h3:first-of-type{margin-top:0}
 .weekly-todo{margin-top:16px;background:#f6efe4;border:1px dashed #d9cdbb;border-radius:12px;
  padding:12px 15px;color:#6d6055;font-size:12.5px;line-height:1.75}
 .weekly-todo b{color:#4a3f35}
+.summary{background:#fffdfa;border:1px solid rgba(37,31,25,.09);border-radius:16px;
+ padding:16px 20px;margin:16px 0 0;
+ box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
+.summary h2{margin:0 0 6px;font-size:11.5px;color:#6d6055;font-weight:700;letter-spacing:.5px}
+.summary p{margin:0;font-size:13.5px;line-height:1.85;color:#251f19}
+.summary b{font-variant-numeric:tabular-nums}
+.weekly-chip small{margin-left:5px;font-size:11px}
+.inout>div>b{width:64px}
+td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
 #w-overview:checked ~ #weekly-overview,
 #w-value:checked    ~ #weekly-defensive_value,
 #w-momentum:checked ~ #weekly-operating_momentum{display:block}
@@ -386,6 +592,7 @@ h3:first-of-type{margin-top:0}
     {navigation}
   </div>
 </header>
+{summary_block}
 <section class="weekly-panel" id="weekly-operating_momentum">{_model_section('operating_momentum', selected_by_model['operating_momentum'])}</section>
 <section class="weekly-panel" id="weekly-defensive_value">{_model_section('defensive_value', selected_by_model['defensive_value'])}</section>
 <section class="weekly-panel" id="weekly-overview">
@@ -393,10 +600,26 @@ h3:first-of-type{margin-top:0}
   <p class="note">失效日不納入排名、進出榜或交集比較。</p>
   <div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">有效日</th>
   <th class="number">失效日</th><th>失效原因</th></tr></thead><tbody>{quality_rows}</tbody></table></div>
-  <h3>雙模型交集逐日變化</h3>
-  <p class="note">交集不代表買進建議，只表示同一有效市場日同時進入兩個模型精華20。</p>
+  <h3>較上週變化</h3>
+  <p class="note">比較本週末與上週末的精華20。跨模型版本時不計算——名次差異會同時包含市場變動與模型變動。</p>
+  <div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">留任</th>
+  <th class="number">新進</th><th class="number">掉出</th><th>比較基準</th></tr></thead>
+  <tbody>{"".join(wow_blocks)}</tbody></table></div>
+
+  <h3>精華20產業分布</h3>
+  <p class="note">期末精華20 的產業組成，與上週末對照；產業輪動在週頻最看得出來。</p>
+  <div class="tablewrap"><table><thead><tr><th>模型</th><th>產業（檔數）</th>
+  <th>對照</th></tr></thead><tbody>{"".join(industry_rows)}</tbody></table></div>
+
+  <h3>雙模型交集</h3>
+  <p class="note">交集不代表買進建議，只表示同一有效市場日同時進入兩個模型精華20。
+  全週都在的比只出現一兩天的更值得優先研究。</p>
+  {persistence_block}
   <div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th>
   <th>標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div>
+
+  <h3>人工複核進度</h3>
+  {review_block}
   <div class="weekly-todo"><b>前瞻報酬暫不提供：</b>需累積足夠的5／20／60交易日資料，
   並處理股利與公司行動後才啟用。</div>
 </section>
@@ -415,6 +638,7 @@ def write_weekly_report(
     *,
     week_start: date,
     week_end: date,
+    manual_review: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Path]:
     label = f"{week_start.isoformat()}_{week_end.isoformat()}"
     dated_dir = reports_root / "weekly" / label
@@ -423,6 +647,9 @@ def write_weekly_report(
     latest_dir.mkdir(parents=True, exist_ok=True)
     dated_path = dated_dir / "index.html"
     latest_path = latest_dir / "index.html"
-    dated_path.write_text(build_weekly_html(records, week_start=week_start, week_end=week_end), encoding="utf-8")
+    dated_path.write_text(
+        build_weekly_html(records, week_start=week_start, week_end=week_end, manual_review=manual_review),
+        encoding="utf-8",
+    )
     shutil.copy2(dated_path, latest_path)
     return {"html": dated_path, "latest_html": latest_path}
