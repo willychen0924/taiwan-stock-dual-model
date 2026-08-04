@@ -634,18 +634,21 @@ def build_weekly_html(
 .tablewrap thead th:last-child,.tablewrap tbody td:last-child{padding-right:18px}
 .tablewrap tbody tr:hover td{background:var(--fill)}
 .stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
-/* 三張個股表統一為「關鍵數值 → 代碼 → 公司 → 細節」，欄寬固定才對得齊 */
+/* 三張個股表統一為「關鍵數值 → 代碼 → 公司 → 細節」。每一欄都給固定寬——
+   只固定前三欄的話，第 4、5 欄仍會各自貼齊內容，左右兩半就對不起來。 */
 .stocktable th:nth-child(1),.stocktable td:nth-child(1){width:56px}
 .stocktable th:nth-child(2),.stocktable td:nth-child(2){width:58px}
 .stocktable th:nth-child(3),.stocktable td:nth-child(3){width:96px;overflow:hidden;
  text-overflow:ellipsis}
+.stocktable th:nth-child(4),.stocktable td:nth-child(4){width:76px}
+.stocktable th:nth-child(5),.stocktable td:nth-child(5){width:auto}
+.stocktable th:nth-child(6),.stocktable td:nth-child(6){width:76px}
 .stocktable .lead{font-weight:700}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:0 -18px -17px}
 .cols2>div{min-width:0;overflow-x:auto}
 .cols2 .tablewrap{margin:0}
 .cols2 .tablewrap thead th:first-child,.cols2 .tablewrap tbody td:first-child{padding-left:18px}
-.cols2>div+div .tablewrap thead th:first-child,
-.cols2>div+div .tablewrap tbody td:first-child{padding-left:8px}
+/* 左右兩半必須用完全相同的內距與欄寬，否則整排會平移對不齊 */
 .subcap{font-size:11.5px;font-weight:700;color:var(--ink2);padding:0 18px 6px}
 .ibar{display:grid;grid-template-columns:110px 1fr 46px;align-items:center;gap:10px;
  padding:3px 18px;font-size:12.5px}
@@ -654,12 +657,8 @@ def build_weekly_html(
 .itrack i{display:block;height:100%;background:var(--active);opacity:.45}
 .icount{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink)}
 .icount small{margin-left:4px;font-weight:600}
-.cols2>div+div .ibar{padding-left:8px}
-.cols2>div+div .subcap{padding-left:8px}
-@media(max-width:900px){.cols2{grid-template-columns:1fr;gap:14px 0}
- .cols2>div+div .tablewrap thead th:first-child,
- .cols2>div+div .tablewrap tbody td:first-child,
- .cols2>div+div .subcap{padding-left:18px}}
+
+@media(max-width:900px){.cols2{grid-template-columns:1fr;gap:14px 0}}
 /* 警示色與日報一致；整個系統只有一種警報色，異常的辨識度才不會隨頁面浮動 */
 .weekly-warning{margin:14px 0;background:rgba(208,59,59,.07);border-left:4px solid #d03b3b;
  border-radius:9px;padding:12px 15px;color:#a8331f;line-height:1.75;font-size:12.5px}
