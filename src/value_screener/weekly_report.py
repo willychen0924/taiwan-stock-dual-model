@@ -251,7 +251,7 @@ def two_columns(left: str, right: str) -> str:
 def rank_table(caption: str, rows: str) -> str:
     return (
         f'<div class="subcap">{caption}</div>'
-        '<div class="tablewrap"><table class="stocktable"><thead>'
+        '<div class="tablewrap"><table class="stocktable t-rank"><thead>'
         '<tr><th class="number lead">變動</th><th>代碼</th><th>公司</th>'
         f'<th class="number">期初</th><th class="number">期末</th></tr></thead>'
         f'<tbody>{rows}</tbody></table></div>'
@@ -260,7 +260,7 @@ def rank_table(caption: str, rows: str) -> str:
 
 def stability_table(rows: str) -> str:
     return (
-        '<div class="tablewrap"><table class="stocktable"><thead>'
+        '<div class="tablewrap"><table class="stocktable t-stab"><thead>'
         '<tr><th class="number lead">名次</th><th>代碼</th><th>公司</th>'
         f'<th class="number">在榜／連續</th><th>穩定度</th></tr></thead>'
         f'<tbody>{rows}</tbody></table></div>'
@@ -596,8 +596,10 @@ def build_weekly_html(
 .stocktable th:nth-child(3),.stocktable td:nth-child(3){width:96px;overflow:hidden;
  text-overflow:ellipsis}
 .stocktable th:nth-child(4),.stocktable td:nth-child(4){width:76px}
-.stocktable th:nth-child(5),.stocktable td:nth-child(5){width:auto}
-.stocktable th:nth-child(6),.stocktable td:nth-child(6){width:76px}
+/* 第 5 欄兩種表內容不同——穩定度是長條、期末是數字，各自固定寬，
+   不用 auto，表格才不會被撐滿而拉開欄距 */
+.t-stab th:nth-child(5),.t-stab td:nth-child(5){width:132px}
+.t-rank th:nth-child(5),.t-rank td:nth-child(5){width:76px}
 .stocktable .lead{font-weight:700}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:0 -18px -17px}
 .cols2>div{min-width:0;overflow-x:auto}
