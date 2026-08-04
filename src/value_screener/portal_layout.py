@@ -22,7 +22,7 @@ SCORE_COLORS = {"first": "#5c9b62", "second": "#1e5fae", "third": "#eb6834"}
 # radio 在 .wrap 內，CSS 的 ~ 選擇器碰不到 body，因此改用一層固定定位的
 # .pagebg 承接背景色。
 PAGE_TINTS = {
-    "momentum": "#faf6ef",   # 暖石陶土 88°
+    "momentum": "var(--page)",   # 暖石陶土 88°
     "value": "#eff8fd",      # 冷石灰藍 238°
     "overview": "#eff9f6",   # 霧綠 178°（雙模型交集）
     "weekly": "#f8f5fc",     # 淡紫灰 308°（整份週報）
@@ -119,6 +119,41 @@ def list_row(cells: list[str], grid_class: str, *, detail: str = "") -> str:
     return f'<details class="lrow {grid_class}">{body}</details>'
 
 
+# 兩份報表各一組色票。日報維持原本的暖石陶土；週報換一組同樣偏暖但明顯
+# 不同的色相，讓人一眼分辨自己在看哪一份，不必先讀標題。
+#
+# 分數三色（防禦／估值／動能）與警示紅不在這裡——前者是編碼，跟著主題變
+# 就失去意義；後者是警報色，浮動會讓異常的辨識度隨頁面改變。
+DAILY_THEME = dict(
+    page="#faf6ef", surface="#fffdfa", line="rgba(37,31,25,.09)", line2="#ece2d4",
+    tint="#f1e8db", tinth="#e8dcc9", fill="#f6efe4", hover="#f3ebde",
+    active="#3a2c22", ink="#251f19", ink2="#6d6055", muted="#a89b8b",
+    faint="#d9cdbb", inks="#4a3f35", rule="#e4d9c8", link="#2a78d6",
+    disabled="#c6b9a6",
+)
+WEEKLY_THEME = dict(
+    page="#fff4f3", surface="#fffbfb", line="rgba(52,32,30,.09)", line2="#f0e2e1",
+    tint="#fae7e4", tinth="#f2dad7", fill="#fbeeec", hover="#fbeae8",
+    active="#5a3a36", ink="#2d2322", ink2="#6e605e", muted="#ac9d9b",
+    faint="#ddcbc8", inks="#4c3f3e", rule="#e7d6d4", link="#2a78d6",
+    disabled="#cab7b5",
+)
+
+
+def _vars(spec: dict[str, str]) -> str:
+    return ";".join(f"--{key}:{value}" for key, value in spec.items())
+
+
+def theme_css() -> str:
+    """日報一組、週報一組。週報的 radio 是 #w-*，靠它把整組變數換掉；
+    `~ *` 會把變數設在所有同層兄弟上，子元素自動繼承。"""
+    return (
+        f":root{{{_vars(DAILY_THEME)}}}\n"
+        f"#w-momentum:checked ~ *,#w-value:checked ~ *,#w-overview:checked ~ *"
+        f"{{{_vars(WEEKLY_THEME)}}}\n"
+    )
+
+
 def portal_css() -> str:
     first, second, third = SCORE_COLORS["first"], SCORE_COLORS["second"], SCORE_COLORS["third"]
     model_cols, inter_cols = COLS_VALUE, COLS_INTERSECTION
@@ -126,9 +161,9 @@ def portal_css() -> str:
     page_default = PAGE_TINTS["momentum"]
     tint_momentum, tint_value = PAGE_TINTS["momentum"], PAGE_TINTS["value"]
     tint_overview, tint_weekly = PAGE_TINTS["overview"], PAGE_TINTS["weekly"]
-    return f"""
+    return theme_css() + f"""
 *{{box-sizing:border-box}}
-body{{margin:0;background:{page_default};color:#251f19;font-size:13px;
+body{{margin:0;background:{page_default};color:var(--ink);font-size:13px;
  font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Segoe UI",sans-serif;
  -webkit-font-smoothing:antialiased}}
 .wrap{{max-width:1500px;margin:0 auto;padding:18px 22px 48px}}
@@ -145,56 +180,56 @@ body{{margin:0;background:{page_default};color:#251f19;font-size:13px;
 #w-value:checked    ~ .pagebg,
 #w-momentum:checked ~ .pagebg{{background:{tint_weekly}}}
 
-.head{{background:#fffdfa;border:1px solid rgba(37,31,25,.09);border-radius:16px;
+.head{{background:var(--surface);border:1px solid var(--line);border-radius:16px;
  padding:0 24px 4px;overflow:hidden;
  box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}}
 .accent{{height:3px;margin:0 -24px 18px;
  background:linear-gradient(90deg,{first} 0 34%,{second} 34% 67%,{third} 67% 100%)}}
 .headrow{{display:flex;align-items:center;gap:16px;flex-wrap:wrap}}
-.head h1{{margin:0;font-size:25px;font-weight:800;letter-spacing:-.4px;color:#251f19;line-height:1.2}}
-.metaline{{margin:7px 0 0;font-size:12.5px;color:#6d6055;display:flex;align-items:center;gap:7px;
+.head h1{{margin:0;font-size:25px;font-weight:800;letter-spacing:-.4px;color:var(--ink);line-height:1.2}}
+.metaline{{margin:7px 0 0;font-size:12.5px;color:var(--ink2);display:flex;align-items:center;gap:7px;
  flex-wrap:wrap}}
-.metaline em{{font-style:normal;color:#d9cdbb}}
-.statusdot{{width:7px;height:7px;border-radius:99px;background:#a89b8b;display:inline-block}}
+.metaline em{{font-style:normal;color:var(--faint)}}
+.statusdot{{width:7px;height:7px;border-radius:99px;background:var(--muted);display:inline-block}}
 .statusdot.warn{{background:#c07a1e}}.statusdot.fail{{background:#d03b3b}}
 
-.period-nav{{display:inline-flex;gap:2px;background:#f1e8db;padding:3px;
+.period-nav{{display:inline-flex;gap:2px;background:var(--tint);padding:3px;
  border-radius:999px;flex:none}}
 /* 尺寸與模型分頁一致，緊鄰其右；選中樣式刻意不同，區分主要動作與次要導覽 */
 .period-link{{padding:8px 20px;border-radius:999px;font-size:14.5px;text-decoration:none;
- color:#6d6055;font-weight:600;white-space:nowrap;transition:background .15s,color .15s}}
-a.period-link:hover{{background:#e8dcc9;color:#3a2c22}}
-.period-link.active{{background:#fffdfa;color:#251f19;font-weight:700;
+ color:var(--ink2);font-weight:600;white-space:nowrap;transition:background .15s,color .15s}}
+a.period-link:hover{{background:var(--tinth);color:var(--active)}}
+.period-link.active{{background:var(--surface);color:var(--ink);font-weight:700;
  box-shadow:0 1px 2px rgba(11,11,11,.12)}}
-.period-link.disabled{{color:#c6b9a6;cursor:not-allowed}}
+.period-link.disabled{{color:var(--disabled);cursor:not-allowed}}
 
 .tabrow{{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0 20px}}
-.tabs{{display:inline-flex;background:#f1e8db;border-radius:999px;padding:3px;gap:2px}}
-.tabs label{{padding:8px 20px;font-size:14.5px;cursor:pointer;color:#6d6055;font-weight:600;
+.tabs{{display:inline-flex;background:var(--tint);border-radius:999px;padding:3px;gap:2px}}
+.tabs label{{padding:8px 20px;font-size:14.5px;cursor:pointer;color:var(--ink2);font-weight:600;
  border-radius:999px;user-select:none;transition:background .15s,color .15s;white-space:nowrap}}
-.tabs label:hover{{background:#e8dcc9}}
+.tabs label:hover{{background:var(--tinth)}}
 #t-momentum:checked ~ .head .tabs label[for=t-momentum],
 #t-value:checked    ~ .head .tabs label[for=t-value],
-#t-inter:checked    ~ .head .tabs label[for=t-inter]{{background:#3a2c22;color:#fff;font-weight:700}}
+#t-inter:checked    ~ .head .tabs label[for=t-inter]{{background:var(--active);color:#fff;font-weight:700}}
 
 .panel{{padding:18px 0 0;display:none}}
 #t-momentum:checked ~ #p-momentum,
 #t-value:checked    ~ #p-value,
 #t-inter:checked    ~ #p-inter{{display:block}}
 
-.legend{{display:flex;gap:11px;align-items:center;font-size:11.5px;color:#a89b8b;margin-bottom:8px;
+.legend{{display:flex;gap:11px;align-items:center;font-size:11.5px;color:var(--muted);margin-bottom:8px;
  flex-wrap:wrap}}
 .legend span{{white-space:nowrap}}
 .legend i{{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;
  vertical-align:-1px}}
 
-.listwrap{{background:#fffdfa;border:1px solid rgba(37,31,25,.09);border-radius:16px;
+.listwrap{{background:var(--surface);border:1px solid var(--line);border-radius:16px;
  overflow-x:auto;box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}}
 .lgrid-model{{--cols:{model_cols};--minw:{model_min}px}}
 .lgrid-inter{{--cols:{inter_cols};--minw:{inter_min}px}}
 .lrow.flatrow>.rowline,.lhead,.lrow>summary{{display:grid;grid-template-columns:var(--cols);align-items:center;
  gap:0 {_COLUMN_GAP}px;padding:0 16px;min-width:var(--minw,1200px);width:100%}}
-.lhead{{background:#f6efe4;border-bottom:1px solid #ece2d4;color:#6d6055;font-size:11.5px;
+.lhead{{background:var(--fill);border-bottom:1px solid var(--line2);color:var(--ink2);font-size:11.5px;
  font-weight:700;padding-top:9px;padding-bottom:9px;position:sticky;top:0;z-index:2;
  align-items:end;line-height:1.32;min-width:var(--minw,1200px)}}
 .lhead span{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
@@ -206,62 +241,62 @@ a.period-link:hover{{background:#e8dcc9;color:#3a2c22}}
 .lhead .k2:before{{background:{second}}}
 .lhead .k3:before{{background:{third}}}
 
-.lrow{{border-bottom:1px solid #f1e8db;min-width:var(--minw,1200px)}}
+.lrow{{border-bottom:1px solid var(--tint);min-width:var(--minw,1200px)}}
 .lrow.flatrow>.rowline{{padding-top:11px;padding-bottom:11px;font-size:13.5px}}
 .lrow>summary{{list-style:none;cursor:pointer;padding-top:11px;padding-bottom:11px;font-size:13.5px}}
 .lrow>summary::-webkit-details-marker{{display:none}}
-.lrow>summary:hover{{background:#f3ebde}}
-.lrow[open]>summary{{background:#f6efe4}}
-.lrow .rk,.lrow .ind{{color:#a89b8b;font-variant-numeric:tabular-nums;position:relative;
+.lrow>summary:hover{{background:var(--hover)}}
+.lrow[open]>summary{{background:var(--fill)}}
+.lrow .rk,.lrow .ind{{color:var(--muted);font-variant-numeric:tabular-nums;position:relative;
  padding-left:13px}}
-.lrow .ind{{color:#2a78d6}}
-.lrow .rk:before,.lrow .ind:before{{content:"▸";position:absolute;left:0;color:#d9cdbb;
+.lrow .ind{{color:var(--link)}}
+.lrow .rk:before,.lrow .ind:before{{content:"▸";position:absolute;left:0;color:var(--faint);
  font-size:10px;transition:transform .12s;display:inline-block}}
-.lrow[open] .rk:before,.lrow[open] .ind:before{{transform:rotate(90deg);color:#3a2c22}}
+.lrow[open] .rk:before,.lrow[open] .ind:before{{transform:rotate(90deg);color:var(--active)}}
 .lrow .nm{{font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;
  white-space:nowrap}}
 .lrow .n,.lhead .n{{text-align:right;font-variant-numeric:tabular-nums}}
-.lrow .tot{{font-weight:700;color:#251f19;font-size:15.5px}}
-.lrow .mono{{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#2a78d6;font-size:13px}}
+.lrow .tot{{font-weight:700;color:var(--ink);font-size:15.5px}}
+.lrow .mono{{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link);font-size:13px}}
 .lrow .sm{{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
-.lrow .dim,.lhead .dim{{color:#a89b8b}}
+.lrow .dim,.lhead .dim{{color:var(--muted)}}
 .barcell{{display:flex;align-items:center}}
 .bar{{display:inline-flex;width:100%;height:8px;border-radius:99px;overflow:hidden;
- background:#ece2d4;vertical-align:middle}}
+ background:var(--line2);vertical-align:middle}}
 .bar i{{display:block;height:100%}}
 .up{{color:#3f6b46;font-weight:600}}.down{{color:#b8452a;font-weight:600}}
-.flat{{color:#a89b8b}}.new{{color:#8a5aa8;font-weight:600}}
+.flat{{color:var(--muted)}}.new{{color:#8a5aa8;font-weight:600}}
 
 /* 技術／籌碼來自外部檔案，與模型欄位之間留一道分隔 */
 .lrow .sig:nth-last-child(2),.lhead span:nth-last-child(2){{margin-left:10px;
- border-left:1px solid #ece2d4;padding-left:14px}}
+ border-left:1px solid var(--line2);padding-left:14px}}
 .sigchip{{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11.5px;font-weight:600;
  white-space:nowrap;font-style:normal}}
 .sigchip.up{{background:#e7f0e3;color:#3f6b46}}
-.sigchip.mid{{background:#f1e8db;color:#6d6055}}
+.sigchip.mid{{background:var(--tint);color:var(--ink2)}}
 .sigchip.down{{background:#fae5dd;color:#b8452a}}
 
-.dwrap{{margin:0;padding:3px 16px 14px;background:#f6efe4}}
+.dwrap{{margin:0;padding:3px 16px 14px;background:var(--fill)}}
 .drow{{display:grid;grid-template-columns:66px 1fr;gap:14px;padding:7px 0;align-items:baseline}}
-.drow+.drow{{border-top:1px dotted #e4d9c8}}
-.drow dt{{font-size:11.5px;font-weight:700;color:#a89b8b;white-space:nowrap;letter-spacing:.3px}}
-.drow dd{{margin:0;font-size:12.5px;line-height:1.8;color:#6d6055}}
+.drow+.drow{{border-top:1px dotted var(--rule)}}
+.drow dt{{font-size:11.5px;font-weight:700;color:var(--muted);white-space:nowrap;letter-spacing:.3px}}
+.drow dd{{margin:0;font-size:12.5px;line-height:1.8;color:var(--ink2)}}
 .drow dd .sigchip{{margin-right:8px;vertical-align:1px}}
 
-.watchlist>summary{{cursor:pointer;color:#3a2c22;font-size:12.5px;padding:11px 2px;font-weight:600}}
-.note{{color:#6d6055;font-size:12.5px;line-height:1.75;margin:0 0 12px}}
-.empty,.unavailable{{color:#6d6055;font-size:12.5px;line-height:1.75;margin:0 0 12px}}
+.watchlist>summary{{cursor:pointer;color:var(--active);font-size:12.5px;padding:11px 2px;font-weight:600}}
+.note{{color:var(--ink2);font-size:12.5px;line-height:1.75;margin:0 0 12px}}
+.empty,.unavailable{{color:var(--ink2);font-size:12.5px;line-height:1.75;margin:0 0 12px}}
 
 /* 資料狀態：正常時安靜，異常時自動展開並轉為警示色 */
-.audit{{margin-top:26px;padding-top:14px;border-top:1px solid #e4d9c8}}
-.audit h2{{font-size:11.5px;color:#6d6055;margin:0 0 8px;font-weight:700;letter-spacing:.5px}}
+.audit{{margin-top:26px;padding-top:14px;border-top:1px solid var(--rule)}}
+.audit h2{{font-size:11.5px;color:var(--ink2);margin:0 0 8px;font-weight:700;letter-spacing:.5px}}
 .model-status{{display:none}}
 #t-momentum:checked ~ .audit #status-momentum,
 #t-value:checked    ~ .audit #status-value,
 #t-inter:checked    ~ .audit #status-value,
 #t-inter:checked    ~ .audit #status-momentum{{display:block}}
 .statusbox{{margin:0 0 2px;font-size:12.5px}}
-.statusbox.ok{{color:#6d6055}}
+.statusbox.ok{{color:var(--ink2)}}
 .statusbox.warn,.statusbox.fail{{background:rgba(208,59,59,.07);border-left:4px solid #d03b3b;border-radius:8px;
  color:#a8331f;margin-bottom:8px}}
 .statusbox summary{{list-style:none;cursor:pointer;padding:5px 2px;display:flex;align-items:center;
@@ -270,30 +305,30 @@ a.period-link:hover{{background:#e8dcc9;color:#3a2c22}}
 .statusbox summary::-webkit-details-marker{{display:none}}
 .statusbox summary:after{{content:"▾";margin-left:auto;opacity:.5;font-size:11px}}
 .statusbox[open] summary:after{{content:"▴"}}
-.statusbox .status-dot{{width:7px;height:7px;border-radius:99px;flex:none;background:#a89b8b}}
+.statusbox .status-dot{{width:7px;height:7px;border-radius:99px;flex:none;background:var(--muted)}}
 .statusbox.warn .status-dot,.statusbox.fail .status-dot{{background:#d03b3b;width:8px;height:8px}}
 .statusbox .check-count{{margin-left:14px;opacity:.8;white-space:nowrap}}
-.statusbox.ok .status-summary strong{{color:#4a3f35;font-weight:700}}
-.statusbox .checks{{background:#f6efe4;border:1px solid #f1e8db;border-radius:8px;margin:2px 0 0;
+.statusbox.ok .status-summary strong{{color:var(--inks);font-weight:700}}
+.statusbox .checks{{background:var(--fill);border:1px solid var(--tint);border-radius:8px;margin:2px 0 0;
  overflow:hidden}}
-.statusbox .status-stats{{padding:9px 12px 8px;border-bottom:1px solid #f1e8db;color:#6d6055;
+.statusbox .status-stats{{padding:9px 12px 8px;border-bottom:1px solid var(--tint);color:var(--ink2);
  line-height:1.5}}
-.statusbox .status-stats strong{{color:#4a3f35;font-variant-numeric:tabular-nums;font-weight:700;
+.statusbox .status-stats strong{{color:var(--inks);font-variant-numeric:tabular-nums;font-weight:700;
  font-size:13.5px}}
 .statusbox table{{width:100%;border-collapse:collapse}}
-.statusbox thead th{{text-align:left;padding:7px 12px;font-size:11px;color:#6d6055;font-weight:600;
- border-bottom:1px solid #ece2d4;background:transparent}}
-.statusbox td{{padding:6px 12px;border-bottom:1px solid #f1e8db}}
+.statusbox thead th{{text-align:left;padding:7px 12px;font-size:11px;color:var(--ink2);font-weight:600;
+ border-bottom:1px solid var(--line2);background:transparent}}
+.statusbox td{{padding:6px 12px;border-bottom:1px solid var(--tint)}}
 .statusbox td:nth-child(2),.statusbox td:nth-child(3),
 .statusbox th:nth-child(2),.statusbox th:nth-child(3){{text-align:right;
  font-variant-numeric:tabular-nums}}
-.statusbox .check-note{{color:#a89b8b}}
+.statusbox .check-note{{color:var(--muted)}}
 .status{{display:inline-block;padding:1px 8px;border-radius:5px;font-size:10.5px;font-weight:700}}
 .status.ok{{background:#e7f0e3;color:#3f6b46}}
 .status.warn{{background:#fbf0dc;color:#8a5a1a}}
 .status.fail{{background:#fae5dd;color:#a8331f}}
 
-.foot{{margin-top:10px;color:#6d6055;font-size:11.5px;line-height:1.55}}
+.foot{{margin-top:10px;color:var(--ink2);font-size:11.5px;line-height:1.55}}
 @media(max-width:760px){{.wrap{{padding:14px 12px 40px}}.head{{padding:0 16px 4px}}
  .accent{{margin:0 -16px 14px}}
  .tabs label,.period-link{{padding:8px 14px;font-size:13.5px}}}}

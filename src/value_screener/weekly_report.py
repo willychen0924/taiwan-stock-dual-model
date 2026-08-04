@@ -524,39 +524,42 @@ def build_weekly_html(
         monthly_href=None,
     )
     css = portal_css() + """
-h3{margin:24px 0 8px;font-size:15px;color:#251f19;font-weight:700}
+h3{margin:24px 0 8px;font-size:15px;color:var(--ink);font-weight:700}
 h3:first-of-type{margin-top:0}
 .n,.number{text-align:right;font-variant-numeric:tabular-nums}
-.tablewrap{background:#fffdfa;border:1px solid rgba(37,31,25,.09);border-radius:16px;overflow-x:auto;
+.tablewrap{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow-x:auto;
  box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
 .tablewrap table{width:100%;border-collapse:collapse;font-size:13.5px}
-.tablewrap thead th{background:#f6efe4;color:#6d6055;text-align:left;padding:10px 14px;font-weight:700;
- font-size:11.5px;border-bottom:1px solid #ece2d4;white-space:nowrap}
+.tablewrap thead th{background:var(--fill);color:var(--ink2);text-align:left;padding:10px 14px;font-weight:700;
+ font-size:11.5px;border-bottom:1px solid var(--line2);white-space:nowrap}
 .tablewrap thead th.number,.tablewrap thead th.n{text-align:right}
-.tablewrap tbody td{padding:11px 14px;border-bottom:1px solid #f1e8db;vertical-align:top}
+.tablewrap tbody td{padding:11px 14px;border-bottom:1px solid var(--tint);vertical-align:top}
 .tablewrap tbody tr:last-child td{border-bottom:none}
-.tablewrap tbody tr:hover td{background:#f6efe4}
-.stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#2a78d6}
-.weekly-warning{margin:14px 0;background:#fbf3e4;border-left:4px solid #c07a1e;border-radius:9px;
- padding:12px 15px;color:#8a5a1a;line-height:1.75;font-size:12.5px}
-.weekly-chip{display:inline-block;background:#f1e8db;border:1px solid #ece2d4;border-radius:8px;
+.tablewrap tbody tr:hover td{background:var(--fill)}
+.stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
+/* 警示色與日報一致；整個系統只有一種警報色，異常的辨識度才不會隨頁面浮動 */
+.weekly-warning{margin:14px 0;background:rgba(208,59,59,.07);border-left:4px solid #d03b3b;
+ border-radius:9px;padding:12px 15px;color:#a8331f;line-height:1.75;font-size:12.5px}
+.weekly-chip{display:inline-block;background:var(--tint);border:1px solid var(--line2);border-radius:8px;
  padding:4px 10px;margin:0 6px 5px 0;font-size:12.5px}
-.weekly-chip.in{background:#e7f0e3;border-color:#cfe0c8}
-.weekly-chip.out{background:#fae5dd;border-color:#f0cfc4}
-.weekly-chip b{font-family:ui-monospace,Menlo,monospace;color:#2a78d6}
+.weekly-chip.in{background:#e7f0e3;border-color:#cfe0c8;color:#3f6b46}
+.weekly-chip.out{background:#fae5dd;border-color:#f0cfc4;color:#b8452a}
+.weekly-chip b{font-family:ui-monospace,Menlo,monospace;color:var(--link)}
 .inout>div{margin:8px 0}
 .inout>div>b{display:inline-block;width:52px;font-size:11.5px;letter-spacing:.3px}
 .in{color:#3f6b46}.out{color:#b8452a}
-.stability{display:block;width:120px;height:8px;border-radius:999px;background:#ece2d4;overflow:hidden}
-.stability i{display:block;height:100%;background:#5c9b62}
-.weekly-todo{margin-top:16px;background:#f6efe4;border:1px dashed #d9cdbb;border-radius:12px;
- padding:12px 15px;color:#6d6055;font-size:12.5px;line-height:1.75}
-.weekly-todo b{color:#4a3f35}
-.summary{background:#fffdfa;border:1px solid rgba(37,31,25,.09);border-radius:16px;
+/* 穩定度衡量的是「在榜天數」，不是分數區塊——不沿用分數三色，避免誤讀 */
+.stability{display:block;width:120px;height:8px;border-radius:999px;background:var(--line2);
+ overflow:hidden}
+.stability i{display:block;height:100%;background:var(--active);opacity:.55}
+.weekly-todo{margin-top:16px;background:var(--fill);border:1px dashed var(--faint);border-radius:12px;
+ padding:12px 15px;color:var(--ink2);font-size:12.5px;line-height:1.75}
+.weekly-todo b{color:var(--inks)}
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:16px;
  padding:16px 20px;margin:16px 0 0;
  box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
-.summary h2{margin:0 0 6px;font-size:11.5px;color:#6d6055;font-weight:700;letter-spacing:.5px}
-.summary p{margin:0;font-size:13.5px;line-height:1.85;color:#251f19}
+.summary h2{margin:0 0 6px;font-size:11.5px;color:var(--ink2);font-weight:700;letter-spacing:.5px}
+.summary p{margin:0;font-size:13.5px;line-height:1.85;color:var(--ink)}
 .summary b{font-variant-numeric:tabular-nums}
 .weekly-chip small{margin-left:5px;font-size:11px}
 .inout>div>b{width:64px}
@@ -567,7 +570,7 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
 .weekly-panel{display:none;padding-top:18px}
 #w-overview:checked ~ .head .tabs label[for=w-overview],
 #w-value:checked    ~ .head .tabs label[for=w-value],
-#w-momentum:checked ~ .head .tabs label[for=w-momentum]{background:#3a2c22;color:#fff;font-weight:700}
+#w-momentum:checked ~ .head .tabs label[for=w-momentum]{background:var(--active);color:#fff;font-weight:700}
 """
     return f"""<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
