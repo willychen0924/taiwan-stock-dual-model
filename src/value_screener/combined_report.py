@@ -250,7 +250,6 @@ def build_combined_html(
   <div class="accent"></div>
   <div class="headrow">
     <h1>台股雙模型監控台</h1>
-    {navigation}
   </div>
   <p class="metaline">
     <span class="statusdot {overall.lower()}"></span>{esc(overall)}
@@ -258,10 +257,13 @@ def build_combined_html(
     <em>·</em> 財報季 {esc(value_meta.get('latest_financial_quarter'))}
     <em>·</em> 營收期 {esc(value_meta.get('latest_revenue_period'))}
   </p>
-  <div class="tabs">
-    <label for="t-momentum">營運動能</label>
-    <label for="t-value">防禦價值</label>
-    <label for="t-inter">雙模型交集</label>
+  <div class="tabrow">
+    <div class="tabs">
+      <label for="t-momentum">營運動能</label>
+      <label for="t-value">防禦價值</label>
+      <label for="t-inter">雙模型交集</label>
+    </div>
+    {navigation}
   </div>
 </header>
 

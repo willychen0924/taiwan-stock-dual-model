@@ -135,15 +135,18 @@ body{{margin:0;background:#faf6ef;color:#251f19;font-size:13px;
 .statusdot{{width:7px;height:7px;border-radius:99px;background:#a89b8b;display:inline-block}}
 .statusdot.warn{{background:#c07a1e}}.statusdot.fail{{background:#d03b3b}}
 
-.periods{{margin-left:auto;display:inline-flex;gap:2px;background:#f1e8db;padding:3px;
- border-radius:999px}}
-.periods a,.periods span{{padding:5px 14px;border-radius:999px;font-size:12.5px;
- text-decoration:none;color:#6d6055;font-weight:600}}
-.periods .active{{background:#3a2c22;color:#fff;font-weight:700}}
-.periods .disabled{{color:#c6b9a6;cursor:not-allowed}}
+.period-nav{{display:inline-flex;gap:2px;background:#f1e8db;padding:3px;
+ border-radius:999px;flex:none}}
+/* 尺寸與模型分頁一致，緊鄰其右；選中樣式刻意不同，區分主要動作與次要導覽 */
+.period-link{{padding:8px 20px;border-radius:999px;font-size:14.5px;text-decoration:none;
+ color:#6d6055;font-weight:600;white-space:nowrap;transition:background .15s,color .15s}}
+a.period-link:hover{{background:#e8dcc9;color:#3a2c22}}
+.period-link.active{{background:#fffdfa;color:#251f19;font-weight:700;
+ box-shadow:0 1px 2px rgba(11,11,11,.12)}}
+.period-link.disabled{{color:#c6b9a6;cursor:not-allowed}}
 
-.tabs{{display:inline-flex;background:#f1e8db;border-radius:999px;padding:3px;gap:2px;
- margin:18px 0 20px}}
+.tabrow{{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0 20px}}
+.tabs{{display:inline-flex;background:#f1e8db;border-radius:999px;padding:3px;gap:2px}}
 .tabs label{{padding:8px 20px;font-size:14.5px;cursor:pointer;color:#6d6055;font-weight:600;
  border-radius:999px;user-select:none;transition:background .15s,color .15s;white-space:nowrap}}
 .tabs label:hover{{background:#e8dcc9}}
@@ -269,5 +272,6 @@ body{{margin:0;background:#faf6ef;color:#251f19;font-size:13px;
 
 .foot{{margin-top:10px;color:#6d6055;font-size:11.5px;line-height:1.55}}
 @media(max-width:760px){{.wrap{{padding:14px 12px 40px}}.head{{padding:0 16px 4px}}
- .accent{{margin:0 -16px 14px}}}}
+ .accent{{margin:0 -16px 14px}}
+ .tabs label,.period-link{{padding:8px 14px;font-size:13.5px}}}}
 """
