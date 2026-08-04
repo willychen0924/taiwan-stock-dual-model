@@ -197,6 +197,11 @@ a.period-link:hover{{background:var(--tinth);color:var(--active)}}
 .legend span{{white-space:nowrap}}
 .legend i{{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;
  vertical-align:-1px}}
+/* 兩個模型的表格必須從相同高度開始。圖例文字長度不同時維持單行，窄螢幕可橫向滑動，
+   避免切換分頁時其中一邊換行而把表頭往下推。 */
+.model-panel>.note,.model-panel>.legend{{white-space:nowrap;overflow-x:auto;scrollbar-width:none}}
+.model-panel>.note::-webkit-scrollbar,.model-panel>.legend::-webkit-scrollbar{{display:none}}
+.model-panel>.legend{{flex-wrap:nowrap}}
 
 .listwrap{{background:var(--surface);border:1px solid var(--line);border-radius:16px;
  overflow-x:auto;box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}}
@@ -249,7 +254,8 @@ details.lrow[open]{{border-bottom:6px solid var(--page);box-shadow:inset 3px 0 0
 /* 前 5 名與其後的分隔。上下邊框已足夠，不再另加裝飾線——
    那條線會把文字推到右側，與其他內容的左緣對不齊。 */
 .groupsep{{padding:7px 16px 7px 29px;font-size:11px;color:var(--muted);letter-spacing:.4px;
- background:var(--fill);border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}}
+ min-width:var(--minw,1200px);width:100%;box-sizing:border-box;background:var(--fill);
+ border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}}
 .bar{{display:inline-flex;width:100%;height:8px;border-radius:99px;overflow:hidden;
  background:var(--line2);vertical-align:middle}}
 .bar i{{display:block;height:100%}}

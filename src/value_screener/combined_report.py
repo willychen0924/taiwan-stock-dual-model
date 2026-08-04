@@ -136,7 +136,7 @@ def _split_top(rows: list[dict[str, Any]], render, cutoff: int = 5) -> str:
         return render(rows, True)
     return (
         render(rows[:cutoff], True)
-        + f'<div class="groupsep">第 {cutoff + 1}–{len(rows)} 名</div>'
+        + f'<div class="groupsep lgrid-model">第 {cutoff + 1}–{len(rows)} 名</div>'
         + render(rows[cutoff:], False)
     )
 
@@ -286,7 +286,7 @@ def build_combined_html(
   </div>
 </header>
 
-<section class="panel" id="p-momentum">
+<section class="panel model-panel" id="p-momentum">
   <p class="note">{rank_comparison_note(momentum_comparison)}</p>
   {_LEGEND_MOMENTUM}
   {_listing(_HEAD_MOMENTUM, "lgrid-model", _split_top(
@@ -301,7 +301,7 @@ def build_combined_html(
   {watchlist(momentum_rest, "觀察前100", _listing(_HEAD_MOMENTUM, "lgrid-model", _momentum_rows(momentum_rest, momentum_comparison, enrichment, expandable=False)))}
 </section>
 
-<section class="panel" id="p-value">
+<section class="panel model-panel" id="p-value">
   <p class="note">{rank_comparison_note(value_comparison)}</p>
   {_LEGEND_VALUE}
   {_listing(_HEAD_VALUE, "lgrid-model", _split_top(

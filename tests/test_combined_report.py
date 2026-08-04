@@ -104,12 +104,24 @@ class CombinedReportTests(unittest.TestCase):
             _result_with_ranked_rows("defensive_value"),
             _result_with_ranked_rows("operating_momentum"),
         )
+        self.assertEqual(page.count('class="panel model-panel"'), 2)
         for panel_id, next_anchor in (("p-momentum", "p-value"), ("p-value", "p-inter")):
             panel = page[page.index(f'id="{panel_id}"'):page.index(f'id="{next_anchor}"')]
             self.assertEqual(panel.count('<details class="lrow lgrid-model">'), 20)
             self.assertEqual(panel.count("<dt>模型短評</dt>"), 20)
             self.assertEqual(panel.count("<dt>技術面</dt>"), 5)
             self.assertEqual(panel.count("<dt>籌碼面</dt>"), 5)
+            self.assertIn('<div class="groupsep lgrid-model">第 6–20 名</div>', panel)
+
+    def test_model_panels_align_intro_height_and_group_separator_width(self) -> None:
+        page = build_combined_html(
+            _result_with_ranked_rows("defensive_value"),
+            _result_with_ranked_rows("operating_momentum"),
+        )
+        self.assertIn(".model-panel>.note,.model-panel>.legend{white-space:nowrap;overflow-x:auto", page)
+        self.assertIn(".model-panel>.legend{flex-wrap:nowrap}", page)
+        self.assertIn(".groupsep{padding:7px 16px 7px 29px", page)
+        self.assertIn("min-width:var(--minw,1200px);width:100%;box-sizing:border-box", page)
 
     def test_signal_columns_are_omitted_from_table_headers(self) -> None:
         page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
