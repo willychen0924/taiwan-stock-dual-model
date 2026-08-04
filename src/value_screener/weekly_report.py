@@ -244,6 +244,17 @@ def manual_review_progress(
     }
 
 
+def section(title: str, note: str, body: str) -> str:
+    """一節＝標題＋同一行的說明＋內容。說明不另起段落，否則資料會被推到很下面。"""
+    hint = f'<span class="sechint">{note}</span>' if note else ""
+    return f'<div class="sec"><div class="sechead"><h3>{title}</h3>{hint}</div>{body}</div>'
+
+
+def card(*parts: str) -> str:
+    """整個面板一張卡、內部以細線分節——十幾張獨立圓角卡片是視覺噪音的來源。"""
+    return f'<div class="card">{"".join(part for part in parts if part)}</div>'
+
+
 def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
     label = MODEL_LABELS[model_id]
     segment, segments = longest_version_segment(selected)
@@ -309,24 +320,46 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
     component_rows.sort(key=lambda item: item[0], reverse=True)
     if component_rows:
         component_head = "".join(f'<th class="number">{html.escape(name)}</th>' for _, name in component_defs)
-        component_table = (
-            '<h3>分數組成變化</h3><p class="note">顯示期末精華20中，分數區塊變化最大的10檔；正負號只描述模型分數變化。</p>'
+        component_table = section(
+            "分數組成變化",
+            "期末精華20中分數區塊變化最大的10檔；正負號只描述模型分數變化",
             '<div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th>'
             f'{component_head}<th class="number">總分</th></tr></thead><tbody>'
-            f'{"".join(row for _, row in component_rows[:10])}</tbody></table></div>'
+            f'{"".join(row for _, row in component_rows[:10])}</tbody></table></div>',
         )
     else:
-        component_table = '<div class="weekly-todo">此區間的歷史 schema 尚無完整 components，暫不呈現分數組成變化。</div>'
+        component_table = section(
+            "分數組成變化", "",
+            '<p class="dim">此區間的歷史 schema 尚無完整 components，暫不呈現。</p>',
+        )
 
     if len(segment) < 2:
-        comparisons = '<p class="note">同版本有效觀測只有 1 日，暫不計算進出榜與名次變化。</p>'
-    else:
-        comparisons = f"""
-<h3>精華20名單變動</h3><div class="inout"><div><b class="in">新增</b>{_chips(incoming, 'in')}</div><div><b class="out">移出</b>{_chips(outgoing, 'out')}</div></div>
-<h3>期末精華20穩定度</h3><p class="note">穩定度以本段有效市場觀測為分母；最長連續為連續入選精華20的觀測數。</p><div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th><th class="number">在榜日／最長連續</th><th>穩定度</th><th class="number">期末名次</th></tr></thead><tbody>{''.join(stability_rows)}</tbody></table></div>
-<h3>重大名次變化</h3><p class="note">只比較期初與期末皆在硬門檻排名內的公司，列出絕對變動最大的10檔。</p><div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th><th class="number">期初</th><th class="number">期末</th><th class="number">變動</th></tr></thead><tbody>{change_rows}</tbody></table></div>
-{component_table}"""
-    return segment_note + comparisons
+        return segment_note + card(
+            section("比較說明", "", '<p class="dim">同版本有效觀測只有 1 日，暫不計算進出榜與名次變化。</p>'),
+            component_table,
+        )
+    return segment_note + card(
+        section(
+            "精華20名單變動", "",
+            f'<div class="inout"><div><b class="in">新增</b>{_chips(incoming, "in")}</div>'
+            f'<div><b class="out">移出</b>{_chips(outgoing, "out")}</div></div>',
+        ),
+        section(
+            "期末精華20穩定度",
+            "分母為本段有效市場觀測；最長連續為連續入選精華20的觀測數",
+            '<div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th>'
+            '<th class="number">在榜日／最長連續</th><th>穩定度</th>'
+            f'<th class="number">期末名次</th></tr></thead><tbody>{"".join(stability_rows)}</tbody></table></div>',
+        ),
+        section(
+            "重大名次變化",
+            "只比較期初與期末皆在硬門檻排名內的公司，取絕對變動最大的10檔",
+            '<div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th>'
+            '<th class="number">期初</th><th class="number">期末</th>'
+            f'<th class="number">變動</th></tr></thead><tbody>{change_rows}</tbody></table></div>',
+        ),
+        component_table,
+    )
 
 
 def build_weekly_html(
@@ -513,9 +546,13 @@ def build_weekly_html(
            + '。跨版本的名次差異同時包含市場變動與模型變動，無法歸因，因此各模型只比較'
              '同一版本內最長的連續區間。</p>' if has_change else
            '<p class="note">本週各模型版本一致，全期間可直接比較。</p>')
-        + '<div class="tablewrap"><table><thead><tr><th>模型</th><th>採用版本</th>'
-          '<th>比較區間</th><th>排除區間</th></tr></thead>'
-          f'<tbody>{"".join(version_rows)}</tbody></table></div></div>'
+        + card(section(
+            "各模型採用的區間", "",
+            '<div class="tablewrap"><table><thead><tr><th>模型</th><th>採用版本</th>'
+            '<th>比較區間</th><th>排除區間</th></tr></thead>'
+            f'<tbody>{"".join(version_rows)}</tbody></table></div>',
+        ))
+        + "</div>"
     )
     navigation = period_navigation(
         "weekly",
@@ -524,17 +561,23 @@ def build_weekly_html(
         monthly_href=None,
     )
     css = portal_css() + """
-h3{margin:24px 0 8px;font-size:15px;color:var(--ink);font-weight:700}
-h3:first-of-type{margin-top:0}
 .n,.number{text-align:right;font-variant-numeric:tabular-nums}
-.tablewrap{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow-x:auto;
- box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;
+ margin-bottom:16px;box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
+.sec{padding:15px 18px 17px}
+.sec+.sec{border-top:1px solid var(--line2)}
+.sechead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.sechead h3{margin:0;font-size:13.5px;font-weight:700;color:var(--ink)}
+.sechint{font-size:11.5px;color:var(--muted);line-height:1.5}
+.tablewrap{overflow-x:auto;margin:0 -18px -17px;padding:0}
 .tablewrap table{width:100%;border-collapse:collapse;font-size:13.5px}
 .tablewrap thead th{background:var(--fill);color:var(--ink2);text-align:left;padding:10px 14px;font-weight:700;
  font-size:11.5px;border-bottom:1px solid var(--line2);white-space:nowrap}
 .tablewrap thead th.number,.tablewrap thead th.n{text-align:right}
 .tablewrap tbody td{padding:11px 14px;border-bottom:1px solid var(--tint);vertical-align:top}
 .tablewrap tbody tr:last-child td{border-bottom:none}
+.tablewrap thead th:first-child,.tablewrap tbody td:first-child{padding-left:18px}
+.tablewrap thead th:last-child,.tablewrap tbody td:last-child{padding-right:18px}
 .tablewrap tbody tr:hover td{background:var(--fill)}
 .stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
 /* 警示色與日報一致；整個系統只有一種警報色，異常的辨識度才不會隨頁面浮動 */
@@ -552,8 +595,8 @@ h3:first-of-type{margin-top:0}
 .stability{display:block;width:120px;height:8px;border-radius:999px;background:var(--line2);
  overflow:hidden}
 .stability i{display:block;height:100%;background:var(--active);opacity:.55}
-.weekly-todo{margin-top:16px;background:var(--fill);border:1px dashed var(--faint);border-radius:12px;
- padding:12px 15px;color:var(--ink2);font-size:12.5px;line-height:1.75}
+.weekly-todo{margin-top:10px;background:var(--fill);border:1px dashed var(--faint);
+ border-radius:10px;padding:10px 13px;color:var(--ink2);font-size:12.5px;line-height:1.7}
 .weekly-todo b{color:var(--inks)}
 .summary{background:var(--surface);border:1px solid var(--line);border-radius:16px;
  padding:16px 20px;margin:16px 0 0;
@@ -599,32 +642,33 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
 <section class="weekly-panel" id="weekly-operating_momentum">{_model_section('operating_momentum', selected_by_model['operating_momentum'])}</section>
 <section class="weekly-panel" id="weekly-defensive_value">{_model_section('defensive_value', selected_by_model['defensive_value'])}</section>
 <section class="weekly-panel" id="weekly-overview">
-  <h3>資料品質</h3>
-  <p class="note">失效日不納入排名、進出榜或交集比較。</p>
-  <div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">有效日</th>
-  <th class="number">失效日</th><th>失效原因</th></tr></thead><tbody>{quality_rows}</tbody></table></div>
-  <h3>較上週變化</h3>
-  <p class="note">比較本週末與上週末的精華20。跨模型版本時不計算——名次差異會同時包含市場變動與模型變動。</p>
-  <div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">留任</th>
-  <th class="number">新進</th><th class="number">掉出</th><th>比較基準</th></tr></thead>
-  <tbody>{"".join(wow_blocks)}</tbody></table></div>
-
-  <h3>精華20產業分布</h3>
-  <p class="note">期末精華20 的產業組成，與上週末對照；產業輪動在週頻最看得出來。</p>
-  <div class="tablewrap"><table><thead><tr><th>模型</th><th>產業（檔數）</th>
-  <th>對照</th></tr></thead><tbody>{"".join(industry_rows)}</tbody></table></div>
-
-  <h3>雙模型交集</h3>
-  <p class="note">交集不代表買進建議，只表示同一有效市場日同時進入兩個模型精華20。
-  全週都在的比只出現一兩天的更值得優先研究。</p>
-  {persistence_block}
-  <div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th>
-  <th>標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div>
-
-  <h3>人工複核進度</h3>
-  {review_block}
-  <div class="weekly-todo"><b>前瞻報酬暫不提供：</b>需累積足夠的5／20／60交易日資料，
-  並處理股利與公司行動後才啟用。</div>
+{card(
+  section("較上週變化",
+          "比較本週末與上週末的精華20；跨模型版本時不計算",
+          '<div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">留任</th>'
+          '<th class="number">新進</th><th class="number">掉出</th><th>比較基準</th></tr></thead>'
+          f'<tbody>{"".join(wow_blocks)}</tbody></table></div>'),
+  section("精華20產業分布",
+          "期末組成與上週末對照；產業輪動在週頻最看得出來",
+          '<div class="tablewrap"><table><thead><tr><th>模型</th><th>產業（檔數）</th>'
+          f'<th>對照</th></tr></thead><tbody>{"".join(industry_rows)}</tbody></table></div>'),
+  section("雙模型交集",
+          "全週都在的比只出現一兩天的更值得優先研究",
+          persistence_block
+          + '<div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th>'
+          f'<th>標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div>'),
+)}
+{card(
+  section("資料品質",
+          "失效日不納入排名、進出榜或交集比較",
+          '<div class="tablewrap"><table><thead><tr><th>模型</th><th class="number">有效日</th>'
+          '<th class="number">失效日</th><th>失效原因</th></tr></thead>'
+          f'<tbody>{quality_rows}</tbody></table></div>'),
+  section("人工複核進度", "", review_block),
+  section("前瞻報酬",
+          "需累積足夠的 5／20／60 交易日資料，並處理股利與公司行動後才啟用",
+          '<p class="dim">暫不提供。</p>'),
+)}
 </section>
 
 {version_section}
