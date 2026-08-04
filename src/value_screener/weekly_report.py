@@ -245,7 +245,7 @@ def section(title: str, note: str, body: str) -> str:
 def two_columns(left: str, right: str, *, tight: bool = False) -> str:
     """並排兩塊。固定寬的表格用 tight——1fr 1fr 會讓 418px 的表格各分到
     七百多像素，中間空出一大片；auto 欄並靠左才會相鄰。"""
-    css = "cols2 tight" if tight else "cols2"
+    css = "cols2"
     return f'<div class="{css}"><div>{left}</div><div>{right}</div></div>'
 
 
@@ -254,7 +254,7 @@ def rank_table(caption: str, rows: str) -> str:
         f'<div class="subcap">{caption}</div>'
         '<div class="tablewrap"><table class="stocktable t-rank"><thead>'
         '<tr><th class="number lead">變動</th><th>代碼</th><th>公司</th>'
-        f'<th class="number">期初</th><th class="number">期末</th></tr></thead>'
+        '<th class="number">期初</th><th class="number">期末</th><th class="spacer"></th></tr></thead>'
         f'<tbody>{rows}</tbody></table></div>'
     )
 
@@ -263,7 +263,7 @@ def stability_table(rows: str) -> str:
     return (
         '<div class="tablewrap"><table class="stocktable t-stab"><thead>'
         '<tr><th class="number lead">名次</th><th>代碼</th><th>公司</th>'
-        f'<th class="number">在榜／連續</th><th>穩定度</th></tr></thead>'
+        '<th class="number">在榜／連續</th><th>穩定度</th><th class="spacer"></th></tr></thead>'
         f'<tbody>{rows}</tbody></table></div>'
     )
 
@@ -304,7 +304,7 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
             f'<td>{html.escape(str(item.get("stock_name") or ""))}</td>'
             f'<td class="number">{days}／{streak}</td>'
             f'<td><span class="stability"><i style="width:{days / len(segment):.1%}"></i></span></td>'
-            "</tr>"
+            '<td class="spacer"></td></tr>'
         )
 
     changes: list[tuple[int, str, dict[str, Any], dict[str, Any]]] = []
@@ -323,9 +323,9 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
             f'<td>{html.escape(str(last_item.get("stock_name") or ""))}</td>'
             f'<td class="number dim">{int(first_item["rank"])}</td>'
             f'<td class="number">{int(last_item["rank"])}</td>'
-            "</tr>"
+            '<td class="spacer"></td></tr>'
             for delta, stock_id, first_item, last_item in items
-        ) or '<tr><td colspan="5" class="dim">無</td></tr>'
+        ) or '<tr><td colspan="6" class="dim">無</td></tr>'
 
     risers = [item for item in changes if item[0] > 0][:8]
     fallers = [item for item in changes if item[0] < 0][-8:][::-1]
@@ -594,9 +594,11 @@ def build_weekly_html(
 .stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
 /* 三張個股表統一為「關鍵數值 → 代碼 → 公司 → 細節」。每一欄都給固定寬——
    只固定前三欄的話，第 4、5 欄仍會各自貼齊內容，左右兩半就對不起來。 */
-/* 表格不可撐滿容器：width:100% 時瀏覽器會按比例放大各欄來填滿。
-   兩張個股表用同一個總寬，表頭底色與五條欄界才會一致。 */
-.tablewrap table.stocktable{width:418px;table-layout:fixed}
+/* 表格填滿半版寬度較好讀，但 table-layout:auto 會按比例放大各欄，
+   兩張表的欄界就對不齊。改用 fixed 並補一個吸收剩餘寬度的空白欄，
+   前五欄因此完全照設定值，跨表對齊。 */
+.tablewrap table.stocktable{width:100%;table-layout:fixed}
+.stocktable .spacer{width:auto;padding:0}
 .stocktable th:nth-child(1),.stocktable td:nth-child(1){width:56px}
 .stocktable th:nth-child(2),.stocktable td:nth-child(2){width:58px}
 .stocktable th:nth-child(3),.stocktable td:nth-child(3){width:96px;overflow:hidden;
@@ -605,7 +607,6 @@ def build_weekly_html(
 .stocktable th:nth-child(5),.stocktable td:nth-child(5){width:132px}
 .stocktable .lead{font-weight:700}
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:0 -18px -17px}
-.cols2.tight{grid-template-columns:auto auto;justify-content:start;gap:0 34px}
 .cols2>div{min-width:0;overflow-x:auto}
 .cols2 .tablewrap{margin:0}
 .cols2 .tablewrap thead th:first-child,.cols2 .tablewrap tbody td:first-child{padding-left:18px}
@@ -628,8 +629,11 @@ def build_weekly_html(
 .weekly-chip.in{background:#e7f0e3;border-color:#cfe0c8;color:#3f6b46}
 .weekly-chip.out{background:#fae5dd;border-color:#f0cfc4;color:#b8452a}
 .weekly-chip b{font-family:ui-monospace,Menlo,monospace;color:var(--link)}
-.inout>div{margin:8px 0}
-.inout>div>b{display:inline-block;width:52px;font-size:11.5px;letter-spacing:.3px}
+/* 新增與移出並排、移出靠右——兩者是同一件事的兩面，分兩行讀起來像兩件事 */
+.inout{display:flex;align-items:baseline;gap:16px 32px;flex-wrap:wrap}
+.inout>div{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+.inout>div+div{margin-left:auto}
+.inout>div>b{font-size:11.5px;letter-spacing:.3px;white-space:nowrap}
 .in{color:#3f6b46}.out{color:#b8452a}
 /* 穩定度衡量的是「在榜天數」，不是分數區塊——不沿用分數三色，避免誤讀 */
 .stability{display:block;width:120px;height:8px;border-radius:999px;background:var(--line2);
@@ -645,7 +649,7 @@ def build_weekly_html(
 .summary p{margin:0;font-size:13.5px;line-height:1.85;color:var(--ink)}
 .summary b{font-variant-numeric:tabular-nums}
 .weekly-chip small{margin-left:5px;font-size:11px}
-.inout>div>b{width:64px}
+
 td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
 #w-overview:checked ~ #weekly-overview,
 #w-value:checked    ~ #weekly-defensive_value,
