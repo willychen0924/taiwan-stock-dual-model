@@ -591,6 +591,9 @@ def build_weekly_html(
 .stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
 /* 三張個股表統一為「關鍵數值 → 代碼 → 公司 → 細節」。每一欄都給固定寬——
    只固定前三欄的話，第 4、5 欄仍會各自貼齊內容，左右兩半就對不起來。 */
+/* 表格不可撐滿容器：width:100% 時瀏覽器會按比例放大各欄來填滿，
+   兩張表的固定寬總和不同（418 / 362），放大倍率就不同，欄位便對不齊。 */
+.tablewrap table.stocktable{width:auto;table-layout:fixed}
 .stocktable th:nth-child(1),.stocktable td:nth-child(1){width:56px}
 .stocktable th:nth-child(2),.stocktable td:nth-child(2){width:58px}
 .stocktable th:nth-child(3),.stocktable td:nth-child(3){width:96px;overflow:hidden;
