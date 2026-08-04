@@ -250,6 +250,29 @@ def section(title: str, note: str, body: str) -> str:
     return f'<div class="sec"><div class="sechead"><h3>{title}</h3>{hint}</div>{body}</div>'
 
 
+def two_columns(left: str, right: str) -> str:
+    """並排兩塊。表格貼齊內容後右側會留下大片空白，切成兩欄同時用掉那片
+    空白並讓高度減半，比較時不必一直捲動。"""
+    return f'<div class="cols2"><div>{left}</div><div>{right}</div></div>'
+
+
+def rank_table(caption: str, rows: str) -> str:
+    return (
+        f'<div class="subcap">{caption}</div>'
+        '<div class="tablewrap"><table class="stocktable"><thead><tr><th>代碼</th><th>公司</th>'
+        '<th class="number">期初</th><th class="number">期末</th>'
+        f'<th class="number">變動</th></tr></thead><tbody>{rows}</tbody></table></div>'
+    )
+
+
+def stability_table(rows: str) -> str:
+    return (
+        '<div class="tablewrap"><table class="stocktable"><thead><tr><th>代碼</th><th>公司</th>'
+        '<th class="number">在榜／連續</th><th>穩定度</th>'
+        f'<th class="number">名次</th></tr></thead><tbody>{rows}</tbody></table></div>'
+    )
+
+
 def card(*parts: str) -> str:
     """整個面板一張卡、內部以細線分節——十幾張獨立圓角卡片是視覺噪音的來源。"""
     return f'<div class="card">{"".join(part for part in parts if part)}</div>'
@@ -274,12 +297,12 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
            if len(segments) > 1 else "</p>")
     )
 
-    stability_rows: list[str] = []
+    stability_cells: list[str] = []
     for stock_id, item in sorted(last_top.items(), key=lambda pair: int(pair[1]["rank"])):
         presence = [stock_id in _top(record) for record in segment]
         days = sum(presence)
         streak = _longest_streak(presence)
-        stability_rows.append(
+        stability_cells.append(
             "<tr>"
             f'<td class="stock-id">{html.escape(stock_id)}</td><td>{html.escape(str(item.get("stock_name") or ""))}</td>'
             f'<td class="number">{days}／{streak}</td>'
@@ -292,14 +315,22 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         delta = int(first_map[stock_id]["rank"]) - int(last_map[stock_id]["rank"])
         if delta:
             changes.append((delta, stock_id, first_map[stock_id], last_map[stock_id]))
-    changes.sort(key=lambda item: (abs(item[0]), item[0]), reverse=True)
-    change_rows = "".join(
-        "<tr>"
-        f'<td class="stock-id">{html.escape(stock_id)}</td><td>{html.escape(str(last_item.get("stock_name") or ""))}</td>'
-        f'<td class="number dim">{int(first_item["rank"])}</td><td class="number">{int(last_item["rank"])}</td>'
-        f'<td class="number {"up" if delta > 0 else "down"}">{"↑" if delta > 0 else "↓"}{abs(delta)}</td></tr>'
-        for delta, stock_id, first_item, last_item in changes[:10]
-    ) or '<tr><td colspan="5" class="dim">本區間沒有名次變化。</td></tr>'
+    changes.sort(key=lambda item: item[0], reverse=True)
+
+    def _change_rows(items: list[tuple[int, str, dict[str, Any], dict[str, Any]]]) -> str:
+        return "".join(
+            "<tr>"
+            f'<td class="stock-id">{html.escape(stock_id)}</td>'
+            f'<td>{html.escape(str(last_item.get("stock_name") or ""))}</td>'
+            f'<td class="number dim">{int(first_item["rank"])}</td>'
+            f'<td class="number">{int(last_item["rank"])}</td>'
+            f'<td class="number {"up" if delta > 0 else "down"}">{"↑" if delta > 0 else "↓"}{abs(delta)}</td>'
+            "</tr>"
+            for delta, stock_id, first_item, last_item in items
+        ) or '<tr><td colspan="5" class="dim">無</td></tr>'
+
+    risers = [item for item in changes if item[0] > 0][:8]
+    fallers = [item for item in changes if item[0] < 0][-8:][::-1]
 
     component_defs = COMPONENT_LABELS[model_id]
     component_rows: list[tuple[float, str]] = []
@@ -323,7 +354,7 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         component_table = section(
             "分數組成變化",
             "期末精華20中分數區塊變化最大的10檔；正負號只描述模型分數變化",
-            '<div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th>'
+            '<div class="tablewrap"><table class="stocktable"><thead><tr><th>代碼</th><th>公司</th>'
             f'{component_head}<th class="number">總分</th></tr></thead><tbody>'
             f'{"".join(row for _, row in component_rows[:10])}</tbody></table></div>',
         )
@@ -346,17 +377,21 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
         ),
         section(
             "期末精華20穩定度",
-            "分母為本段有效市場觀測；最長連續為連續入選精華20的觀測數",
-            '<div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th>'
-            '<th class="number">在榜日／最長連續</th><th>穩定度</th>'
-            f'<th class="number">期末名次</th></tr></thead><tbody>{"".join(stability_rows)}</tbody></table></div>',
+            "分母為本段有效市場觀測；連續為連續入選精華20的觀測數",
+            two_columns(
+                stability_table("".join(stability_cells[: (len(stability_cells) + 1) // 2])),
+                stability_table("".join(stability_cells[(len(stability_cells) + 1) // 2 :])),
+            )
+            if len(stability_cells) > 3
+            else stability_table("".join(stability_cells)),
         ),
         section(
             "重大名次變化",
-            "只比較期初與期末皆在硬門檻排名內的公司，取絕對變動最大的10檔",
-            '<div class="tablewrap"><table><thead><tr><th>代碼</th><th>公司</th>'
-            '<th class="number">期初</th><th class="number">期末</th>'
-            f'<th class="number">變動</th></tr></thead><tbody>{change_rows}</tbody></table></div>',
+            "只比較期初與期末皆在硬門檻排名內的公司",
+            two_columns(
+                rank_table("▲ 上升最多", _change_rows(risers)),
+                rank_table("▼ 下降最多", _change_rows(fallers)),
+            ),
         ),
         component_table,
     )
@@ -582,6 +617,22 @@ def build_weekly_html(
 .tablewrap thead th:last-child,.tablewrap tbody td:last-child{padding-right:18px}
 .tablewrap tbody tr:hover td{background:var(--fill)}
 .stock-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
+/* 個股表的代碼／公司固定寬，不同表格之間才對得齊 */
+.stocktable th:nth-child(1),.stocktable td:nth-child(1){width:62px}
+.stocktable th:nth-child(2),.stocktable td:nth-child(2){width:104px;overflow:hidden;
+ text-overflow:ellipsis}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin:0 -18px -17px}
+.cols2>div{min-width:0;overflow-x:auto}
+.cols2 .tablewrap{margin:0}
+.cols2 .tablewrap thead th:first-child,.cols2 .tablewrap tbody td:first-child{padding-left:18px}
+.cols2>div+div .tablewrap thead th:first-child,
+.cols2>div+div .tablewrap tbody td:first-child{padding-left:8px}
+.subcap{font-size:11.5px;font-weight:700;color:var(--ink2);padding:0 18px 6px}
+.cols2>div+div .subcap{padding-left:8px}
+@media(max-width:900px){.cols2{grid-template-columns:1fr;gap:14px 0}
+ .cols2>div+div .tablewrap thead th:first-child,
+ .cols2>div+div .tablewrap tbody td:first-child,
+ .cols2>div+div .subcap{padding-left:18px}}
 /* 警示色與日報一致；整個系統只有一種警報色，異常的辨識度才不會隨頁面浮動 */
 .weekly-warning{margin:14px 0;background:rgba(208,59,59,.07);border-left:4px solid #d03b3b;
  border-radius:9px;padding:12px 15px;color:#a8331f;line-height:1.75;font-size:12.5px}
