@@ -249,6 +249,11 @@ def two_columns(left: str, right: str, *, tight: bool = False) -> str:
     return f'<div class="{css}"><div>{left}</div><div>{right}</div></div>'
 
 
+def industry_columns(left: str, right: str) -> str:
+    """產業分布需要較大的字級與留白，不沿用表格型雙欄的負邊界。"""
+    return f'<div class="industry-grid"><div>{left}</div><div>{right}</div></div>'
+
+
 def rank_table(caption: str, rows: str) -> str:
     return (
         f'<div class="subcap">{caption}</div>'
@@ -422,6 +427,12 @@ def build_weekly_html(
         f'<div><b class="out">部分天數</b>{partial_chips}</div></div>'
         if shared_days else '<p class="dim">本週沒有共同的有效市場日。</p>'
     )
+    intersection_days_block = (
+        f'<details class="intersection-days"><summary>各市場日交集（{shared_days} 個有效日）</summary>'
+        '<div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th>'
+        f'<th class="grow">標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div></details>'
+        if shared_days else ""
+    )
 
     prior_start, prior_end = prior_week_window(week_start, week_end)
     industry_blocks: list[str] = []
@@ -587,8 +598,21 @@ def build_weekly_html(
 .itrack i{display:block;height:100%;background:var(--active);opacity:.45}
 .icount{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink)}
 .icount small{margin-left:4px;font-weight:600}
+.industry-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:36px;
+ padding:3px 0 5px}
+.industry-grid .subcap{padding:0 0 9px;font-size:13px}
+.industry-grid .ibar{grid-template-columns:minmax(120px,150px) 1fr 50px;gap:12px;
+ padding:6px 0;font-size:13.5px;line-height:1.4}
+.industry-grid .itrack{height:8px}
+.intersection-days{margin:6px -18px -17px;border-top:1px solid var(--line2)}
+.intersection-days>summary{list-style:none;cursor:pointer;padding:9px 18px;color:var(--ink2);
+ font-size:12px;font-weight:700}
+.intersection-days>summary::-webkit-details-marker{display:none}
+.intersection-days>summary:after{content:"▾";margin-left:7px;color:var(--muted)}
+.intersection-days[open]>summary:after{content:"▴"}
+.intersection-days .tablewrap{margin:0;border-top:1px solid var(--line2)}
 
-@media(max-width:900px){.cols2,.cols2.tight{grid-template-columns:1fr;gap:14px 0}}
+@media(max-width:900px){.cols2,.cols2.tight,.industry-grid{grid-template-columns:1fr;gap:18px 0}}
 /* 警示色與日報一致；整個系統只有一種警報色，異常的辨識度才不會隨頁面浮動 */
 .weekly-warning{margin:14px 0;background:rgba(208,59,59,.07);border-left:4px solid #d03b3b;
  border-radius:9px;padding:12px 15px;color:#a8331f;line-height:1.75;font-size:12.5px}
@@ -660,12 +684,10 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
           f'<tbody>{"".join(wow_blocks)}</tbody></table></div>'),
   section("精華20產業分布",
           "期末組成與上週末對照；產業輪動在週頻最看得出來",
-          two_columns(industry_blocks[0], industry_blocks[1])),
+          industry_columns(industry_blocks[0], industry_blocks[1])),
   section("雙模型交集",
           "全週都在的比只出現一兩天的更值得優先研究",
-          persistence_block
-          + '<div class="tablewrap"><table><thead><tr><th>市場日</th><th class="number">檔數</th>'
-          f'<th class="grow">標的</th></tr></thead><tbody>{intersection_body}</tbody></table></div>'),
+          persistence_block + intersection_days_block),
 )}
 {card(
   section("資料品質",

@@ -78,6 +78,8 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn("本週摘要", page)
         self.assertIn("較上週變化", page)
         self.assertIn("精華20產業分布", page)
+        self.assertIn('class="industry-grid"', page)
+        self.assertIn(".industry-grid .ibar{grid-template-columns:minmax(120px,150px)", page)
         self.assertIn("人工複核進度", page)
         self.assertNotIn("分數組成變化", page)  # 週內幾乎只有估值區塊會動，三欄裡兩欄恆為 0
         self.assertIn("精華20名單變動", page)
@@ -86,6 +88,11 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn('<b class="out">移出</b>', page)
         self.assertIn("在榜／連續", page)
         self.assertIn(">2／2</td>", page)
+        self.assertIn(
+            '<details class="intersection-days"><summary>各市場日交集（2 個有效日）</summary>',
+            page,
+        )
+        self.assertNotIn('<details class="intersection-days" open>', page)
         self.assertIn('▲ 上升最多', page)
         self.assertIn('▼ 下降最多', page)
         self.assertNotIn("期初至期末淨進出", page)
