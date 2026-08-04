@@ -197,6 +197,8 @@ class WeeklyReportTests(unittest.TestCase):
         )
         self.assertIn("2026-07-27～2026-07-28", page)
         self.assertIn("2026-07-29", page)
+        self.assertIn(".intersection-days .tablewrap tbody td{padding-top:6px;padding-bottom:6px;vertical-align:middle}", page)
+        self.assertIn(".intersection-days .weekly-chip{padding:2px 7px;margin:0 4px 0 0", page)
 
     def test_manual_review_progress_counts_only_decided_rows(self) -> None:
         from value_screener.weekly_report import manual_review_progress

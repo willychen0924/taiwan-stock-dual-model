@@ -659,12 +659,18 @@ def build_weekly_html(
  padding:6px 0;font-size:13.5px;line-height:1.4}
 .industry-grid .itrack{height:8px}
 .intersection-days{margin:6px -18px -17px;border-top:1px solid var(--line2)}
-.intersection-days>summary{list-style:none;cursor:pointer;padding:9px 18px;color:var(--ink2);
+.intersection-days>summary{list-style:none;cursor:pointer;padding:7px 18px;color:var(--ink2);
  font-size:12px;font-weight:700}
 .intersection-days>summary::-webkit-details-marker{display:none}
 .intersection-days>summary:after{content:"▾";margin-left:7px;color:var(--muted)}
 .intersection-days[open]>summary:after{content:"▴"}
 .intersection-days .tablewrap{margin:0;border-top:1px solid var(--line2)}
+.intersection-days table{table-layout:fixed}
+.intersection-days th:first-child,.intersection-days td:first-child{width:210px}
+.intersection-days th:nth-child(2),.intersection-days td:nth-child(2){width:58px}
+.intersection-days .tablewrap thead th{padding-top:6px;padding-bottom:6px}
+.intersection-days .tablewrap tbody td{padding-top:6px;padding-bottom:6px;vertical-align:middle}
+.intersection-days .weekly-chip{padding:2px 7px;margin:0 4px 0 0;font-size:12px;vertical-align:middle}
 .intersection-note{margin:2px 0 0;color:var(--muted);font-size:11.5px}
 
 @media(max-width:900px){.cols2,.cols2.tight,.industry-grid{grid-template-columns:1fr;gap:18px 0}}
