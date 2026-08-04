@@ -5,7 +5,7 @@
 * 分頁與逐列展開一律使用原生機制（radio + ``:checked``、``<details>``），
   不得依賴 JavaScript——禁用 script 的環境仍必須能切換分頁與展開明細。
 * 純 CSS 分頁的 radio 必須與所有受控元素同層；包進卡片會讓 ``~`` 兄弟選擇器失效。
-* 技術面／籌碼面只是呈現欄位，不進入分數、硬門檻或模型狀態。
+* 技術面／籌碼面只出現在前 5 名展開明細，不進入分數、硬門檻或模型狀態。
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ from typing import Any
 SCORE_COLORS = {"first": "#5c9b62", "second": "#1e5fae", "third": "#eb6834"}
 
 # 欄寬依標題字數估算（11.5px 粗體，中文約 11.5px、拉丁約 6px，色點另計 13px）。
-COLS_VALUE = "40px 50px 62px 90px 94px 106px 64px 78px 78px 78px 78px 78px 68px 70px"
+COLS_VALUE = "40px 50px 62px 90px 94px 106px 64px 78px 78px 78px 78px 78px"
 COLS_MOMENTUM = COLS_VALUE
-COLS_INTERSECTION = "66px 104px 112px 72px 78px 72px 78px 68px 70px"
+COLS_INTERSECTION = "66px 104px 112px 72px 78px 72px 78px"
 
 _COLUMN_GAP = 14
 _ROW_PADDING = 32
@@ -63,20 +63,6 @@ def score_bar(segments: list[tuple[str, Any, str]]) -> str:
 def head_row(columns: list[tuple[str, str]], grid_class: str) -> str:
     cells = "".join(f'<span class="{css}">{label}</span>' for label, css in columns)
     return f'<div class="lhead {grid_class}">{cells}</div>'
-
-
-def signal_cells(extra: dict[str, str]) -> str:
-    if not extra:
-        return '<span class="sig dim">—</span><span class="sig dim">—</span>'
-    out = []
-    for prefix in ("technical", "chip"):
-        status = extra.get(f"{prefix}_status") or extra.get(prefix) or ""
-        if not status or status == "—":
-            out.append('<span class="sig dim">—</span>')
-            continue
-        tone = extra.get(f"{prefix}_tone") or "mid"
-        out.append(f'<span class="sig"><b class="sigchip {esc(tone)}">{esc(status)}</b></span>')
-    return "".join(out)
 
 
 def detail_block(
@@ -270,9 +256,6 @@ details.lrow[open]{{border-bottom:6px solid var(--page);box-shadow:inset 3px 0 0
 .up{{color:#3f6b46;font-weight:600}}.down{{color:#b8452a;font-weight:600}}
 .flat{{color:var(--muted)}}.new{{color:#8a5aa8;font-weight:600}}
 
-/* 技術／籌碼來自外部檔案，與模型欄位之間留一道分隔 */
-.lrow .sig:nth-last-child(2),.lhead span:nth-last-child(2){{margin-left:10px;
- border-left:1px solid var(--line2);padding-left:14px}}
 .sigchip{{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11.5px;font-weight:600;
  white-space:nowrap;font-style:normal}}
 .sigchip.up{{background:#e7f0e3;color:#3f6b46}}

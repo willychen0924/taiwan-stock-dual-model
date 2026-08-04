@@ -15,7 +15,6 @@ from .portal_layout import (
     percent,
     portal_css,
     score_bar,
-    signal_cells,
 )
 from .report_common import (
     build_monitor_status,
@@ -31,17 +30,16 @@ _FIRST, _SECOND, _THIRD = SCORE_COLORS["first"], SCORE_COLORS["second"], SCORE_C
 _HEAD_VALUE = [
     ("#", ""), ("Δ", ""), ("代碼", ""), ("公司", ""), ("產業", ""), ("分數組成", ""), ("總分", "n"),
     ("淨現金比", "n k1"), ("清算覆蓋", "n k2"), ("本益比", "n k2"), ("本淨比", "n k2"),
-    ("3M營收", "n k3"), ("技術", ""), ("籌碼", ""),
+    ("3M營收", "n k3"),
 ]
 _HEAD_MOMENTUM = [
     ("#", ""), ("Δ", ""), ("代碼", ""), ("公司", ""), ("產業", ""), ("分數組成", ""), ("總分", "n"),
     ("3M營收", "n k1"), ("營收加速度", "n k1"), ("淨利成長", "n k1"), ("營益率變化", "n k1"),
-    ("現金轉換", "n k2"), ("技術", ""), ("籌碼", ""),
+    ("現金轉換", "n k2"),
 ]
 _HEAD_INTERSECTION = [
     ("代碼", ""), ("公司", ""), ("產業", ""),
     ("價值名次", "n"), ("價值總分", "n"), ("動能名次", "n"), ("動能總分", "n"),
-    ("技術", ""), ("籌碼", ""),
 ]
 
 _LEGEND_VALUE = (
@@ -98,7 +96,6 @@ def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichme
             f'<span class="n">{number(row.get("per"))}</span>',
             f'<span class="n">{number(row.get("pbr"), 2)}</span>',
             f'<span class="n">{percent(row.get("revenue_3m_yoy"))}</span>',
-            signal_cells(extra),
         ]
         detail = detail_block(row, extra, include_signals=include_signals_in_detail) if expandable else ""
         out.append(list_row(cells, "lgrid-model", detail=detail))
@@ -123,7 +120,6 @@ def _momentum_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enric
             f'<span class="n">{percent(row.get("ttm_net_income_growth"))}</span>',
             f'<span class="n">{percent(row.get("ttm_operating_margin_change"), 1)}</span>',
             f'<span class="n">{number(row.get("cash_conversion"), 2)}</span>',
-            signal_cells(extra),
         ]
         detail = detail_block(row, extra, include_signals=include_signals_in_detail) if expandable else ""
         out.append(list_row(cells, "lgrid-model", detail=detail))
@@ -193,7 +189,6 @@ def build_combined_html(
                 f'<span class="n tot">{float(v.get("total_score") or 0):.1f}</span>',
                 f'<span class="n">#{int(m["rank"])}</span>',
                 f'<span class="n tot">{float(m.get("total_score") or 0):.1f}</span>',
-                signal_cells(extra),
             ]
             rows.append(
                 list_row(
@@ -336,7 +331,7 @@ def build_combined_html(
 量化分數只負責縮小研究範圍，不代表預期報酬或買進建議。治理誠信、競爭優勢與新技術催化必須經年報、法說及公開資訊人工查證。
 清算價值為折價情境估計，商譽預設為零，不保證股價下檔。<br>
 排名變動以「較前一個有效市場觀測」計算；當日資料不合格時不顯示變動，亦不計算雙模型交集。
-技術面與籌碼面僅為外部呈現欄位，不進入分數、硬門檻、模型狀態或排名歷史。量化排序不是買進建議。
+技術面與籌碼面僅為前 5 名的外部展開明細，不進入分數、硬門檻、模型狀態或排名歷史。量化排序不是買進建議。
 </p>
 </div></body></html>"""
 

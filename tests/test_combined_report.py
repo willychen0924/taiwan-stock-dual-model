@@ -109,6 +109,12 @@ class CombinedReportTests(unittest.TestCase):
             self.assertEqual(panel.count("<dt>技術面</dt>"), 5)
             self.assertEqual(panel.count("<dt>籌碼面</dt>"), 5)
 
+    def test_signal_columns_are_omitted_from_table_headers(self) -> None:
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        self.assertNotIn('<span class="">技術</span>', page)
+        self.assertNotIn('<span class="">籌碼</span>', page)
+        self.assertIn("技術面與籌碼面僅為前 5 名的外部展開明細", page)
+
     def test_radio_inputs_precede_every_element_they_control(self) -> None:
         """純 CSS 分頁靠 ~ 兄弟選擇器；radio 若被包進卡片，面板會全部隱藏。"""
         page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
