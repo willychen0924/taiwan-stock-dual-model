@@ -103,16 +103,14 @@ class WeeklyReportTests(unittest.TestCase):
                 ]
             )
         page = build_weekly_html(records, week_start=date(2026, 7, 27), week_end=date(2026, 7, 31))
-        # 版本細節集中在頁尾的「模型版本與比較區間」，面板內只留中性的區間說明
-        footer = page[page.index("模型版本與比較區間"):]
-        self.assertIn("2026-07-27～2026-07-28（2 日）", footer)
-        self.assertIn("2026-07-29～2026-07-29（0.2.0，1 日）", footer)
-        # 被選中的區間不得同時出現在「排除區間」欄
-        excluded = footer[footer.index("排除區間"):]
-        self.assertNotIn("2026-07-27～2026-07-28（0.1.0", excluded)
+        # 區間說明自成一句：採用的區間與被排除的區間都寫在面板內
+        self.assertIn("比較區間 <b>2026-07-27～2026-07-28</b>（0.1.0，2 個有效市場日）", page)
+        self.assertIn("已排除 2026-07-29～2026-07-29（0.2.0，1 日）", page)
+        # 被採用的區間不得同時被列為排除
+        self.assertNotIn("已排除 2026-07-27", page)
 
-    def test_version_notice_appears_once_and_at_the_bottom(self) -> None:
-        """警示樣式統一集中在頁尾，面板內不再各自出現一個警示框。"""
+    def test_version_notice_stays_inside_the_panel(self) -> None:
+        """版本說明就在該模型面板內，不另闢頁尾區塊，也不用警示樣式。"""
         records = []
         for model_id in ["defensive_value", "operating_momentum"]:
             records.extend([
@@ -121,9 +119,9 @@ class WeeklyReportTests(unittest.TestCase):
             ])
         page = build_weekly_html(records, week_start=date(2026, 7, 27), week_end=date(2026, 7, 31))
         body = page[page.index("</style>"):]
-        self.assertEqual(body.count('class="weekly-warning"'), 1)
-        self.assertNotIn('class="weekly-warning"', body[:body.index("</header>")])
-        self.assertGreater(body.index('class="weekly-warning"'), body.index('id="weekly-overview"'))
+        self.assertNotIn("模型版本與比較區間", body)
+        self.assertNotIn('class="weekly-warning"', body)
+        self.assertIn("跨版本的名次差異", body)
 
     def test_tab_order_matches_the_daily_portal(self) -> None:
         """模型分頁在前、彙總在後，預設停在營運動能，與日報一致。"""

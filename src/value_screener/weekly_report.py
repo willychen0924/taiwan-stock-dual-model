@@ -285,11 +285,16 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
     incoming = [last_top[key] for key in sorted(last_top.keys() - first_top.keys(), key=lambda key: int(last_top[key]["rank"]))]
     outgoing = [first_top[key] for key in sorted(first_top.keys() - last_top.keys(), key=lambda key: int(first_top[key]["rank"]))]
 
+    excluded = "、".join(
+        f'{part[0].get("latest_market_date")}～{part[-1].get("latest_market_date")}'
+        f'（{_version_label(part[0].get("config_version"))}，{len(part)} 日）'
+        for part in segments if part is not segment
+    )
     segment_note = (
         f'<p class="note">比較區間 <b>{first.get("latest_market_date")}～{last.get("latest_market_date")}</b>'
         f'（{_version_label(first.get("config_version"))}，{len(segment)} 個有效市場日）。'
-        + ("本週有多個模型版本，只取同版本內最長區間；詳見頁尾「模型版本與比較區間」。</p>"
-           if len(segments) > 1 else "</p>")
+        + (f'本週有多個模型版本，已排除 {excluded}——跨版本的名次差異同時包含市場變動與'
+           f'模型變動，無法歸因。</p>' if len(segments) > 1 else "</p>")
     )
 
     stability_cells: list[str] = []
@@ -491,28 +496,6 @@ def build_weekly_html(
             version_changes.append(
                 f'{MODEL_LABELS[model_id]}：{" → ".join(_version_label(version) for version in versions)}'
             )
-    version_rows: list[str] = []
-    for model_id, label in MODEL_LABELS.items():
-        selected = selected_by_model[model_id]
-        if not selected:
-            version_rows.append(f'<tr><td>{label}</td><td class="dim grow" colspan="3">本週沒有有效觀測</td></tr>')
-            continue
-        segment, segments = longest_version_segment(selected)
-        used = (
-            f'{segment[0].get("latest_market_date")}～{segment[-1].get("latest_market_date")}'
-            f'（{len(segment)} 日）'
-        )
-        others = "；".join(
-            f'{part[0].get("latest_market_date")}～{part[-1].get("latest_market_date")}'
-            f'（{_version_label(part[0].get("config_version"))}，{len(part)} 日）'
-            for part in segments if part is not segment
-        ) or "—"
-        version_rows.append(
-            f'<tr><td>{label}</td>'
-            f'<td>{_version_label(segment[0].get("config_version"))}</td>'
-            f'<td>{used}</td><td class="dim grow">{others}</td></tr>'
-        )
-    has_change = bool(version_changes)
     valid_counts = "／".join(
         f"{label} {len(selected_by_model[model_id])}"
         for model_id, label in MODEL_LABELS.items()
@@ -544,26 +527,11 @@ def build_weekly_html(
             f'其中 <b>{len(always)}</b> 檔全週都在。'
         )
     if version_changes:
-        summary_bits.append("本週模型版本有變動，跨版本區間已排除，詳見頁尾。")
+        summary_bits.append("本週模型版本有變動，跨版本區間已排除。")
     summary_block = (
         '<section class="summary"><h2>本週摘要</h2><p>' + " ".join(summary_bits) + "</p></section>"
     )
 
-    version_section = (
-        '<div class="audit"><h2>模型版本與比較區間</h2>'
-        + ('<p class="weekly-warning">本週模型版本有變動：'
-           + "；".join(version_changes)
-           + '。跨版本的名次差異同時包含市場變動與模型變動，無法歸因，因此各模型只比較'
-             '同一版本內最長的連續區間。</p>' if has_change else
-           '<p class="note">本週各模型版本一致，全期間可直接比較。</p>')
-        + card(section(
-            "各模型採用的區間", "",
-            '<div class="tablewrap"><table><thead><tr><th>模型</th><th>採用版本</th>'
-            '<th>比較區間</th><th class="grow">排除區間</th></tr></thead>'
-            f'<tbody>{"".join(version_rows)}</tbody></table></div>',
-        ))
-        + "</div>"
-    )
     navigation = period_navigation(
         "weekly",
         daily_href="../../latest/index.html",
@@ -629,11 +597,9 @@ def build_weekly_html(
 .weekly-chip.in{background:#e7f0e3;border-color:#cfe0c8;color:#3f6b46}
 .weekly-chip.out{background:#fae5dd;border-color:#f0cfc4;color:#b8452a}
 .weekly-chip b{font-family:ui-monospace,Menlo,monospace;color:var(--link)}
-/* 新增與移出並排、移出靠右——兩者是同一件事的兩面，分兩行讀起來像兩件事 */
-.inout{display:flex;align-items:baseline;gap:16px 32px;flex-wrap:wrap}
-.inout>div{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
-.inout>div+div{margin-left:auto}
-.inout>div>b{font-size:11.5px;letter-spacing:.3px;white-space:nowrap}
+/* 上下兩行。檔數可能很多，並排會把兩邊都擠窄 */
+.inout>div{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:8px 0}
+.inout>div>b{flex:none;width:52px;font-size:11.5px;letter-spacing:.3px}
 .in{color:#3f6b46}.out{color:#b8452a}
 /* 穩定度衡量的是「在榜天數」，不是分數區塊——不沿用分數三色，避免誤讀 */
 .stability{display:block;width:120px;height:8px;border-radius:999px;background:var(--line2);
@@ -713,8 +679,6 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
           '<p class="dim">暫不提供。</p>'),
 )}
 </section>
-
-{version_section}
 
 <p class="foot">本報告只由 rankings_history.jsonl 產生，不依賴 14 天內清除的 reports 目錄。
 每個市場日取檔案中最後一份有效版本；跨版本區間分開處理。
