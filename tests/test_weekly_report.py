@@ -79,7 +79,7 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn("較上週變化", page)
         self.assertIn("精華20產業分布", page)
         self.assertIn("人工複核進度", page)
-        self.assertIn("分數組成變化", page)
+        self.assertNotIn("分數組成變化", page)  # 週內幾乎只有估值區塊會動，三欄裡兩欄恆為 0
         self.assertIn("精華20名單變動", page)
         self.assertNotIn("週初 vs 週末", page)
         self.assertIn('<b class="in">新增</b>', page)

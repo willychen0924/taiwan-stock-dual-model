@@ -16,14 +16,6 @@ MODEL_LABELS = {
     "defensive_value": "防禦價值",
     "operating_momentum": "營運動能",
 }
-COMPONENT_LABELS = {
-    "defensive_value": [("defense", "防禦"), ("valuation", "估值"), ("momentum", "動能")],
-    "operating_momentum": [
-        ("operating_momentum", "營運動能"),
-        ("quality", "品質"),
-        ("valuation_liquidity", "估值流動性"),
-    ],
-}
 
 
 def load_history(path: Path) -> list[dict[str, Any]]:
@@ -337,45 +329,9 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
     risers = [item for item in changes if item[0] > 0][:8]
     fallers = [item for item in changes if item[0] < 0][-8:][::-1]
 
-    component_defs = COMPONENT_LABELS[model_id]
-    component_rows: list[tuple[float, str]] = []
-    for stock_id, last_item in last_top.items():
-        first_item = first_map.get(stock_id)
-        first_components = first_item.get("components") if first_item else None
-        last_components = last_item.get("components")
-        if not isinstance(first_components, dict) or not isinstance(last_components, dict):
-            continue
-        deltas = [float(last_components.get(key) or 0) - float(first_components.get(key) or 0) for key, _ in component_defs]
-        cells = "".join(f'<td class="number">{delta:+.1f}</td>' for delta in deltas)
-        row = (
-            "<tr>"
-            f'<td class="number lead">'
-            f'{float(last_item.get("total_score") or 0) - float(first_item.get("total_score") or 0):+.1f}</td>'
-            f'<td class="stock-id">{html.escape(stock_id)}</td>'
-            f'<td>{html.escape(str(last_item.get("stock_name") or ""))}</td>{cells}</tr>'
-        )
-        component_rows.append((sum(abs(value) for value in deltas), row))
-    component_rows.sort(key=lambda item: item[0], reverse=True)
-    if component_rows:
-        component_head = "".join(f'<th class="number">{html.escape(name)}</th>' for _, name in component_defs)
-        component_table = section(
-            "分數組成變化",
-            "期末精華20中分數區塊變化最大的10檔；正負號只描述模型分數變化",
-            '<div class="tablewrap"><table class="stocktable"><thead>'
-            '<tr><th class="number lead">總分</th><th>代碼</th><th>公司</th>'
-            f'{component_head}</tr></thead><tbody>'
-            f'{"".join(row for _, row in component_rows[:10])}</tbody></table></div>',
-        )
-    else:
-        component_table = section(
-            "分數組成變化", "",
-            '<p class="dim">此區間的歷史 schema 尚無完整 components，暫不呈現。</p>',
-        )
-
     if len(segment) < 2:
         return segment_note + card(
             section("比較說明", "", '<p class="dim">同版本有效觀測只有 1 日，暫不計算進出榜與名次變化。</p>'),
-            component_table,
         )
     return segment_note + card(
         section(
@@ -401,7 +357,6 @@ def _model_section(model_id: str, selected: list[dict[str, Any]]) -> str:
                 rank_table("▼ 下降最多", _change_rows(fallers)),
             ),
         ),
-        component_table,
     )
 
 
