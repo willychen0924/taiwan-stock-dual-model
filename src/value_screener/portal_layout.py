@@ -111,14 +111,14 @@ def list_row(cells: list[str], grid_class: str, *, detail: str = "") -> str:
 DAILY_THEME = dict(
     page="#faf6ef", surface="#fffdfa", line="rgba(37,31,25,.09)", line2="#ece2d4",
     tint="#f1e8db", tinth="#e8dcc9", fill="#f6efe4", hover="#f3ebde",
-    active="#3a2c22", ink="#251f19", ink2="#6d6055", muted="#a89b8b",
+    active="#3a2c22", ink="#251f19", ink2="#6d6055", muted="#7c6e62",
     faint="#d9cdbb", inks="#4a3f35", rule="#e4d9c8", link="#2a78d6",
     disabled="#c6b9a6",
 )
 WEEKLY_THEME = dict(
     page="#fff4f3", surface="#fffbfb", line="rgba(52,32,30,.09)", line2="#f0e2e1",
     tint="#fae7e4", tinth="#f2dad7", fill="#fbeeec", hover="#fbeae8",
-    active="#5a3a36", ink="#2d2322", ink2="#6e605e", muted="#ac9d9b",
+    active="#5a3a36", ink="#2d2322", ink2="#6e605e", muted="#7d6d6b",
     faint="#ddcbc8", inks="#4c3f3e", rule="#e7d6d4", link="#2a78d6",
     disabled="#cab7b5",
 )
