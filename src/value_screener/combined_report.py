@@ -7,6 +7,8 @@ from typing import Any
 
 from .portal_layout import (
     SCORE_COLORS,
+    column_ranges,
+    meter_cell,
     detail_block,
     esc,
     head_row,
@@ -48,13 +50,15 @@ _LEGEND_VALUE = (
     f'<div class="legend">分數組成<span><i style="background:{_FIRST}"></i>防禦50</span>'
     f'<span><i style="background:{_SECOND}"></i>估值30</span>'
     f'<span><i style="background:{_THIRD}"></i>動能20</span>'
-    '<span><i style="background:#ece2d4"></i>未取得</span></div>'
+    '<span><i style="background:#ece2d4"></i>未取得</span>'
+    '<span class="legend-note">數值下方淡條＝該欄在本頁區間內的相對位置，不代表好壞</span></div>'
 )
 _LEGEND_MOMENTUM = (
     f'<div class="legend">分數組成<span><i style="background:{_FIRST}"></i>營運動能60</span>'
     f'<span><i style="background:{_SECOND}"></i>品質25</span>'
     f'<span><i style="background:{_THIRD}"></i>估值流動15</span>'
-    '<span><i style="background:#ece2d4"></i>未取得</span></div>'
+    '<span><i style="background:#ece2d4"></i>未取得</span>'
+    '<span class="legend-note">數值下方淡條＝該欄在本頁區間內的相對位置，不代表好壞</span></div>'
 )
 _NOTE_INTERSECTION = (
     '<div class="legend">兩個模型的總分尺度不同，不可直接互相比較；'
@@ -80,8 +84,16 @@ def _identity_cells(row: dict[str, Any], comparison: dict[str, Any]) -> list[str
     ]
 
 
+_VALUE_METRICS = ["net_cash_ratio", "liquidation_coverage", "per", "pbr", "revenue_3m_yoy"]
+_MOMENTUM_METRICS = [
+    "revenue_3m_yoy", "revenue_acceleration", "ttm_net_income_growth",
+    "ttm_operating_margin_change", "cash_conversion",
+]
+
+
 def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict,
-                *, expandable: bool = True) -> str:
+                *, expandable: bool = True, ranges: dict | None = None) -> str:
+    ranges = ranges or {}
     out = []
     for row in rows:
         extra = enrichment.get(str(row.get("stock_id")), {})
@@ -93,11 +105,11 @@ def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichme
         cells = _identity_cells(row, comparison) + [
             f'<span class="barcell">{bar}</span>',
             f'<span class="n tot">{float(row.get("total_score") or 0):.1f}</span>',
-            f'<span class="n">{percent(row.get("net_cash_ratio"))}</span>',
-            f'<span class="n">{percent(row.get("liquidation_coverage"))}</span>',
-            f'<span class="n">{number(row.get("per"))}</span>',
-            f'<span class="n">{number(row.get("pbr"), 2)}</span>',
-            f'<span class="n">{percent(row.get("revenue_3m_yoy"))}</span>',
+            meter_cell(row.get("net_cash_ratio"), percent(row.get("net_cash_ratio")), "net_cash_ratio", ranges),
+            meter_cell(row.get("liquidation_coverage"), percent(row.get("liquidation_coverage")), "liquidation_coverage", ranges),
+            meter_cell(row.get("per"), number(row.get("per")), "per", ranges),
+            meter_cell(row.get("pbr"), number(row.get("pbr"), 2), "pbr", ranges),
+            meter_cell(row.get("revenue_3m_yoy"), percent(row.get("revenue_3m_yoy")), "revenue_3m_yoy", ranges),
             signal_cells(extra),
         ]
         out.append(list_row(cells, "lgrid-model", detail=detail_block(row, extra) if expandable else ""))
@@ -105,7 +117,8 @@ def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichme
 
 
 def _momentum_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict,
-                   *, expandable: bool = True) -> str:
+                   *, expandable: bool = True, ranges: dict | None = None) -> str:
+    ranges = ranges or {}
     out = []
     for row in rows:
         extra = enrichment.get(str(row.get("stock_id")), {})
@@ -117,15 +130,27 @@ def _momentum_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enric
         cells = _identity_cells(row, comparison) + [
             f'<span class="barcell">{bar}</span>',
             f'<span class="n tot">{float(row.get("total_score") or 0):.1f}</span>',
-            f'<span class="n">{percent(row.get("revenue_3m_yoy"))}</span>',
-            f'<span class="n">{percent(row.get("revenue_acceleration"))}</span>',
-            f'<span class="n">{percent(row.get("ttm_net_income_growth"))}</span>',
-            f'<span class="n">{percent(row.get("ttm_operating_margin_change"), 1)}</span>',
-            f'<span class="n">{number(row.get("cash_conversion"), 2)}</span>',
+            meter_cell(row.get("revenue_3m_yoy"), percent(row.get("revenue_3m_yoy")), "revenue_3m_yoy", ranges),
+            meter_cell(row.get("revenue_acceleration"), percent(row.get("revenue_acceleration")), "revenue_acceleration", ranges),
+            meter_cell(row.get("ttm_net_income_growth"), percent(row.get("ttm_net_income_growth")), "ttm_net_income_growth", ranges),
+            meter_cell(row.get("ttm_operating_margin_change"), percent(row.get("ttm_operating_margin_change"), 1), "ttm_operating_margin_change", ranges),
+            meter_cell(row.get("cash_conversion"), number(row.get("cash_conversion"), 2), "cash_conversion", ranges),
             signal_cells(extra),
         ]
         out.append(list_row(cells, "lgrid-model", detail=detail_block(row, extra) if expandable else ""))
     return "".join(out)
+
+
+def _split_top(rows: list[dict[str, Any]], render, cutoff: int = 5) -> str:
+    """精華20 內部再切前 5 與其後。第 1 名與第 20 名的總分常差 10 分以上，
+    第 20 與第 21 名卻只差零點幾分——一視同仁會讓眼睛沒有落點。"""
+    if len(rows) <= cutoff:
+        return render(rows)
+    return (
+        render(rows[:cutoff])
+        + f'<div class="groupsep">第 {cutoff + 1}–{len(rows)} 名</div>'
+        + render(rows[cutoff:])
+    )
 
 
 def _listing(head: list[tuple[str, str]], grid_class: str, body: str) -> str:
@@ -221,6 +246,9 @@ def build_combined_html(
         extra_summary="營運動能",
     )
 
+    # 相對位置條的區間取自精華20＋自選100，讓兩張表的長條可以互相比較
+    value_ranges = column_ranges(value_focus + value_rest, _VALUE_METRICS)
+    momentum_ranges = column_ranges(momentum_focus + momentum_rest, _MOMENTUM_METRICS)
     value_comparison = load_rank_comparison(value_result, history_path)
     momentum_comparison = load_rank_comparison(momentum_result, history_path)
     statuses = [str(value_meta.get("model_status") or "UNKNOWN"), str(momentum_meta.get("model_status") or "UNKNOWN")]
@@ -271,15 +299,15 @@ def build_combined_html(
 <section class="panel" id="p-momentum">
   <p class="note">{rank_comparison_note(momentum_comparison)}</p>
   {_LEGEND_MOMENTUM}
-  {_listing(_HEAD_MOMENTUM, "lgrid-model", _momentum_rows(momentum_focus, momentum_comparison, enrichment))}
-  {watchlist(momentum_rest, "觀察前100", _listing(_HEAD_MOMENTUM, "lgrid-model", _momentum_rows(momentum_rest, momentum_comparison, enrichment, expandable=False)))}
+  {_listing(_HEAD_MOMENTUM, "lgrid-model", _split_top(momentum_focus, lambda part: _momentum_rows(part, momentum_comparison, enrichment, ranges=momentum_ranges)))}
+  {watchlist(momentum_rest, "觀察前100", _listing(_HEAD_MOMENTUM, "lgrid-model", _momentum_rows(momentum_rest, momentum_comparison, enrichment, expandable=False, ranges=momentum_ranges)))}
 </section>
 
 <section class="panel" id="p-value">
   <p class="note">{rank_comparison_note(value_comparison)}</p>
   {_LEGEND_VALUE}
-  {_listing(_HEAD_VALUE, "lgrid-model", _value_rows(value_focus, value_comparison, enrichment))}
-  {watchlist(value_rest, "自選100", _listing(_HEAD_VALUE, "lgrid-model", _value_rows(value_rest, value_comparison, enrichment, expandable=False)))}
+  {_listing(_HEAD_VALUE, "lgrid-model", _split_top(value_focus, lambda part: _value_rows(part, value_comparison, enrichment, ranges=value_ranges)))}
+  {watchlist(value_rest, "自選100", _listing(_HEAD_VALUE, "lgrid-model", _value_rows(value_rest, value_comparison, enrichment, expandable=False, ranges=value_ranges)))}
 </section>
 
 <section class="panel" id="p-inter">
