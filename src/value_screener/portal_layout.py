@@ -235,7 +235,12 @@ a.period-link:hover{{background:var(--tinth);color:var(--active)}}
 .lrow>summary{{list-style:none;cursor:pointer;padding-top:11px;padding-bottom:11px;font-size:13.5px}}
 .lrow>summary::-webkit-details-marker{{display:none}}
 .lrow>summary:hover{{background:var(--hover)}}
-.lrow[open]>summary{{background:var(--fill)}}
+/* 展開項目形成一個完整區塊：主列維持白色，明細用淡底，並在下一檔前留出呼吸。 */
+details.lrow[open]{{border-bottom:6px solid var(--page);box-shadow:inset 3px 0 0 var(--muted)}}
+.lrow[open]>summary{{background:var(--surface)}}
+/* 滑鼠點擊不殘留瀏覽器預設外框；鍵盤瀏覽仍保留清楚的可及性焦點。 */
+.lrow>summary:focus:not(:focus-visible){{outline:none}}
+.lrow>summary:focus-visible{{outline:2px solid var(--link);outline-offset:-2px}}
 .lrow .rk,.lrow .ind{{color:var(--muted);font-variant-numeric:tabular-nums;position:relative;
  padding-left:13px}}
 .lrow .ind{{color:var(--link)}}

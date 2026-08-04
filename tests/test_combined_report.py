@@ -89,6 +89,13 @@ class CombinedReportTests(unittest.TestCase):
             self.assertIn(f'#t-{key.split("-")[1]}:checked', page)
         self.assertIn('<details class="lrow lgrid-', page)
 
+    def test_expanded_rows_have_separation_and_keyboard_focus(self) -> None:
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        self.assertIn("details.lrow[open]{border-bottom:6px solid var(--page)", page)
+        self.assertIn(".lrow[open]>summary{background:var(--surface)}", page)
+        self.assertIn(".lrow>summary:focus:not(:focus-visible){outline:none}", page)
+        self.assertIn(".lrow>summary:focus-visible{outline:2px solid var(--link)", page)
+
     def test_rows_six_to_twenty_expand_to_model_summary_only(self) -> None:
         page = build_combined_html(
             _result_with_ranked_rows("defensive_value"),
