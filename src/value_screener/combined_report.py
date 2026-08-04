@@ -51,14 +51,14 @@ _LEGEND_VALUE = (
     f'<span><i style="background:{_SECOND}"></i>估值30</span>'
     f'<span><i style="background:{_THIRD}"></i>動能20</span>'
     '<span><i style="background:#ece2d4"></i>未取得</span>'
-    '<span class="legend-note">數值下方淡條＝該欄在本頁區間內的相對位置，不代表好壞</span></div>'
+    '<span class="legend-note">數值下方的細軌＝該欄在本頁最小～最大值之間的位置，只表示高低、不表示好壞</span></div>'
 )
 _LEGEND_MOMENTUM = (
     f'<div class="legend">分數組成<span><i style="background:{_FIRST}"></i>營運動能60</span>'
     f'<span><i style="background:{_SECOND}"></i>品質25</span>'
     f'<span><i style="background:{_THIRD}"></i>估值流動15</span>'
     '<span><i style="background:#ece2d4"></i>未取得</span>'
-    '<span class="legend-note">數值下方淡條＝該欄在本頁區間內的相對位置，不代表好壞</span></div>'
+    '<span class="legend-note">數值下方的細軌＝該欄在本頁最小～最大值之間的位置，只表示高低、不表示好壞</span></div>'
 )
 _NOTE_INTERSECTION = (
     '<div class="legend">兩個模型的總分尺度不同，不可直接互相比較；'

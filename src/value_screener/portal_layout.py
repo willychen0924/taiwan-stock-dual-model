@@ -283,10 +283,13 @@ a.period-link:hover{{background:var(--tinth);color:var(--active)}}
 .lrow .sm{{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .lrow .dim,.lhead .dim{{color:var(--muted)}}
 .barcell{{display:flex;align-items:center}}
-/* 相對位置條：只表示該欄在本頁區間內的位置，不表示好壞 */
-.n.meter{{position:relative}}
-.n.meter:after{{content:"";position:absolute;right:0;bottom:1px;height:2px;width:var(--f,0%);
- background:var(--faint);border-radius:2px;opacity:.85}}
+/* 相對位置條：只表示該欄在本頁區間內的位置，不表示好壞。
+   軌道與填色都要畫——只畫填色時，短的那條會被誤認成排版瑕疵。 */
+.n.meter{{position:relative;padding-bottom:5px}}
+.n.meter:before,.n.meter:after{{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+ border-radius:2px}}
+.n.meter:before{{background:var(--line2)}}
+.n.meter:after{{right:auto;width:var(--f,0%);background:var(--muted);opacity:.6}}
 /* 欄位分四區：身分／分數／指標／外部訊號 */
 .lrow>summary>span:nth-child(6),.lrow.flatrow>.rowline>span:nth-child(6),
 .lhead>span:nth-child(6),
