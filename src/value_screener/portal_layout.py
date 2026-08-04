@@ -268,11 +268,10 @@ a.period-link:hover{{background:var(--tinth);color:var(--active)}}
 .lhead>span:nth-child(6),
 .lrow>summary>span:nth-child(8),.lrow.flatrow>.rowline>span:nth-child(8),
 .lhead>span:nth-child(8){{box-shadow:inset 1px 0 0 var(--line2);padding-left:12px}}
-/* 前 5 名與其後的分隔 */
-.groupsep{{display:flex;align-items:center;gap:10px;padding:7px 16px;font-size:11px;
- color:var(--muted);letter-spacing:.4px;background:var(--fill);
- border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}}
-.groupsep:before{{content:"";flex:1;height:1px;background:var(--line2)}}
+/* 前 5 名與其後的分隔。上下邊框已足夠，不再另加裝飾線——
+   那條線會把文字推到右側，與其他內容的左緣對不齊。 */
+.groupsep{{padding:7px 16px 7px 29px;font-size:11px;color:var(--muted);letter-spacing:.4px;
+ background:var(--fill);border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}}
 .bar{{display:inline-flex;width:100%;height:8px;border-radius:99px;overflow:hidden;
  background:var(--line2);vertical-align:middle}}
 .bar i{{display:block;height:100%}}
