@@ -69,25 +69,6 @@ def score_bar(segments: list[tuple[str, Any, str]]) -> str:
     return f'<span class="bar" role="img" aria-label="{esc("／".join(labels))}">{"".join(parts)}</span>'
 
 
-def column_ranges(rows: list[dict[str, Any]], keys: list[str]) -> dict[str, tuple[float, float]]:
-    """各欄在本頁顯示範圍內的最小／最大值，供相對位置條使用。"""
-    ranges: dict[str, tuple[float, float]] = {}
-    for key in keys:
-        values = [float(row[key]) for row in rows if row.get(key) is not None]
-        if values and max(values) > min(values):
-            ranges[key] = (min(values), max(values))
-    return ranges
-
-
-def meter_cell(value: Any, text: str, key: str, ranges: dict[str, tuple[float, float]]) -> str:
-    """數值加一條極淡的相對位置條。條長只表示該欄在本頁區間內的位置，
-    不表示好壞——本益比長條長代表偏貴，不是偏好。"""
-    span = ranges.get(key)
-    if value is None or not span:
-        return f'<span class="n">{text}</span>'
-    low, high = span
-    fraction = max(0.0, min(1.0, (float(value) - low) / (high - low)))
-    return f'<span class="n meter" style="--f:{fraction * 100:.1f}%">{text}</span>'
 
 
 def head_row(columns: list[tuple[str, str]], grid_class: str) -> str:
@@ -241,7 +222,6 @@ a.period-link:hover{{background:var(--tinth);color:var(--active)}}
 .legend{{display:flex;gap:11px;align-items:center;font-size:11.5px;color:var(--muted);margin-bottom:8px;
  flex-wrap:wrap}}
 .legend span{{white-space:nowrap}}
-.legend .legend-note{{white-space:normal;margin-left:auto;font-size:11px;opacity:.85}}
 .legend i{{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;
  vertical-align:-1px}}
 
@@ -283,13 +263,6 @@ a.period-link:hover{{background:var(--tinth);color:var(--active)}}
 .lrow .sm{{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .lrow .dim,.lhead .dim{{color:var(--muted)}}
 .barcell{{display:flex;align-items:center}}
-/* 相對位置條：只表示該欄在本頁區間內的位置，不表示好壞。
-   軌道與填色都要畫——只畫填色時，短的那條會被誤認成排版瑕疵。 */
-.n.meter{{position:relative;padding-bottom:5px}}
-.n.meter:before,.n.meter:after{{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
- border-radius:2px}}
-.n.meter:before{{background:var(--line2)}}
-.n.meter:after{{right:auto;width:var(--f,0%);background:var(--muted);opacity:.6}}
 /* 欄位分四區：身分／分數／指標／外部訊號 */
 .lrow>summary>span:nth-child(6),.lrow.flatrow>.rowline>span:nth-child(6),
 .lhead>span:nth-child(6),
