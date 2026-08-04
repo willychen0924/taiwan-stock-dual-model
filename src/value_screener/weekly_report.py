@@ -199,6 +199,19 @@ def industry_mix(record: dict[str, Any] | None, size: int = 20) -> dict[str, int
     return dict(sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])))
 
 
+def industry_summary(label: str, mix: dict[str, int]) -> str:
+    """以期末精華20描述產業集中，不把模型候選分布誤寫成市場資金流向。"""
+    named = [(name, count) for name, count in mix.items() if name != "未分類"]
+    if not named:
+        return ""
+    leaders = named[:3]
+    total = sum(mix.values())
+    leader_count = sum(count for _, count in leaders)
+    names = "、".join(f"{name} {count} 檔" for name, count in leaders)
+    concentration = f"，前三大占 {leader_count}/{total}" if len(leaders) > 1 else ""
+    return f"{label}以{names}為主{concentration}"
+
+
 def intersection_persistence(
     value_by_date: dict[str, dict[str, Any]],
     momentum_by_date: dict[str, dict[str, Any]],
@@ -532,6 +545,14 @@ def build_weekly_html(
         f'市場週 <b>{week_start}～{week_end}</b>，有效市場日 {valid_counts}。',
         "；".join(highlights) + "。",
     ]
+    industry_sentences = []
+    for model_id, label in MODEL_LABELS.items():
+        selected = selected_by_model[model_id]
+        sentence = industry_summary(label, industry_mix(selected[-1] if selected else None))
+        if sentence:
+            industry_sentences.append(sentence)
+    if industry_sentences:
+        summary_bits.append("期末精華20產業分布：" + "；".join(industry_sentences) + "。")
     if shared_days:
         summary_bits.append(
             f'雙模型交集共 <b>{len(always) + len(partial)}</b> 檔，'

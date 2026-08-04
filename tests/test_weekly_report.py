@@ -30,6 +30,7 @@ def record(model_id: str, market_date: str, *, version: str | None = "0.2.0", el
                 "stock_name": "台積電",
                 "rank": rank,
                 "total_score": 80 - rank,
+                "industry": "半導體業",
                 "components": {"defense": 40, "valuation": 20, "momentum": 10}
                 if model_id == "defensive_value"
                 else {"operating_momentum": 50, "quality": 20, "valuation_liquidity": 10},
@@ -76,6 +77,11 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn("資料品質", page)
         self.assertIn("雙模型交集", page)
         self.assertIn("本週摘要", page)
+        self.assertIn(
+            "期末精華20產業分布：防禦價值以半導體業 1 檔為主；"
+            "營運動能以半導體業 1 檔為主。",
+            page,
+        )
         self.assertIn("較上週變化", page)
         self.assertIn("精華20產業分布", page)
         self.assertIn('class="industry-grid"', page)
