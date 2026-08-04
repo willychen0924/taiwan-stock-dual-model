@@ -43,6 +43,12 @@ fi
 
 "$PYTHON_BIN" scripts/cleanup_old_reports.py --as-of "$AS_OF"
 
+if [[ "${PUBLISH_GITHUB_PAGES:-1}" != "0" ]]; then
+  if ! zsh scripts/publish_github_pages.sh "$AS_OF"; then
+    print -u2 "警告：GitHub Pages 發布失敗；本機報表與排名歷史仍已完成。"
+  fi
+fi
+
 print "完成：reports/latest 與 reports/momentum/latest 的 JSON、CSV、HTML"
 if (( EXCEL_AVAILABLE )); then
   print "完成：outputs/${AS_OF}/台股防禦價值篩選_${AS_OF}.xlsx"

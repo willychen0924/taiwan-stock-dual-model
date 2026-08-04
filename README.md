@@ -50,6 +50,14 @@ zsh scripts/run_all.sh
 
 日報入口為 `reports/latest/index.html`；週報入口為 `reports/weekly/latest/index.html`。週報只使用排名歷史中的有效觀測，並自動切開模型版本。月報需先通過 `scripts/check_monthly_readiness.py` 的資料量與同版本門檻，目前不會以不足資料產生。
 
+完整流程完成後會把最新日報與週報 HTML 推送到遠端 `gh-pages` 分支，再由 GitHub Pages 發布。只發布自包含 HTML，不上傳 `.env`、FinMind 原始資料、JSON、CSV、Excel、QA 或技術籌碼快取。若只想更新本機，可執行：
+
+```bash
+PUBLISH_GITHUB_PAGES=0 zsh scripts/run_all.sh
+```
+
+發布失敗只會顯示警告，不會讓模型、排名歷史或本機報表失敗。
+
 重新下載歷史快取可加上 `--force`。日常執行不需要重抓已封存季度資料。
 
 ## 人工複核
