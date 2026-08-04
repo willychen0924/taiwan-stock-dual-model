@@ -79,11 +79,18 @@ def signal_cells(extra: dict[str, str]) -> str:
     return "".join(out)
 
 
-def detail_block(row: dict[str, Any], extra: dict[str, str]) -> str:
-    """展開後的明細：標籤靠左、內文靠右，不再包卡片。"""
+def detail_block(
+    row: dict[str, Any],
+    extra: dict[str, str],
+    *,
+    include_signals: bool = True,
+) -> str:
+    """展開後的明細；第 6–20 名可只保留模型短評。"""
     lines = [
         f'<div class="drow"><dt>模型短評</dt><dd>{esc(row.get("model_summary") or "—")}</dd></div>'
     ]
+    if not include_signals:
+        return f'<dl class="dwrap">{"".join(lines)}</dl>'
     for label, prefix in (("技術面", "technical"), ("籌碼面", "chip")):
         status = extra.get(f"{prefix}_status") or ""
         summary = extra.get(f"{prefix}_summary") or ""

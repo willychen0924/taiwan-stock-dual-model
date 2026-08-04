@@ -51,6 +51,22 @@ def _result(model_id: str, *, status: str = "OK") -> dict:
     }
 
 
+def _result_with_ranked_rows(model_id: str, count: int = 20) -> dict:
+    result = _result(model_id)
+    source = result["results"][0]
+    result["results"] = [
+        {
+            **source,
+            "rank": rank,
+            "stock_id": str(1000 + rank),
+            "stock_name": f"公司{rank}",
+            "model_summary": f"模型短評{rank}",
+        }
+        for rank in range(1, count + 1)
+    ]
+    return result
+
+
 class CombinedReportTests(unittest.TestCase):
     def test_valid_models_show_intersection(self) -> None:
         page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
@@ -72,6 +88,18 @@ class CombinedReportTests(unittest.TestCase):
         for key in ("p-momentum", "p-value", "p-inter"):
             self.assertIn(f'#t-{key.split("-")[1]}:checked', page)
         self.assertIn('<details class="lrow lgrid-', page)
+
+    def test_rows_six_to_twenty_expand_to_model_summary_only(self) -> None:
+        page = build_combined_html(
+            _result_with_ranked_rows("defensive_value"),
+            _result_with_ranked_rows("operating_momentum"),
+        )
+        for panel_id, next_anchor in (("p-momentum", "p-value"), ("p-value", "p-inter")):
+            panel = page[page.index(f'id="{panel_id}"'):page.index(f'id="{next_anchor}"')]
+            self.assertEqual(panel.count('<details class="lrow lgrid-model">'), 20)
+            self.assertEqual(panel.count("<dt>模型短評</dt>"), 20)
+            self.assertEqual(panel.count("<dt>技術面</dt>"), 5)
+            self.assertEqual(panel.count("<dt>籌碼面</dt>"), 5)
 
     def test_radio_inputs_precede_every_element_they_control(self) -> None:
         """純 CSS 分頁靠 ~ 兄弟選擇器；radio 若被包進卡片，面板會全部隱藏。"""

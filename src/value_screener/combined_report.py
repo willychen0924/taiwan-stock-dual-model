@@ -81,7 +81,7 @@ def _identity_cells(row: dict[str, Any], comparison: dict[str, Any]) -> list[str
 
 
 def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict,
-                *, expandable: bool = True) -> str:
+                *, expandable: bool = True, include_signals_in_detail: bool = True) -> str:
     out = []
     for row in rows:
         extra = enrichment.get(str(row.get("stock_id")), {})
@@ -100,12 +100,13 @@ def _value_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichme
             f'<span class="n">{percent(row.get("revenue_3m_yoy"))}</span>',
             signal_cells(extra),
         ]
-        out.append(list_row(cells, "lgrid-model", detail=detail_block(row, extra) if expandable else ""))
+        detail = detail_block(row, extra, include_signals=include_signals_in_detail) if expandable else ""
+        out.append(list_row(cells, "lgrid-model", detail=detail))
     return "".join(out)
 
 
 def _momentum_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enrichment: dict,
-                   *, expandable: bool = True) -> str:
+                   *, expandable: bool = True, include_signals_in_detail: bool = True) -> str:
     out = []
     for row in rows:
         extra = enrichment.get(str(row.get("stock_id")), {})
@@ -124,19 +125,23 @@ def _momentum_rows(rows: list[dict[str, Any]], comparison: dict[str, Any], enric
             f'<span class="n">{number(row.get("cash_conversion"), 2)}</span>',
             signal_cells(extra),
         ]
-        out.append(list_row(cells, "lgrid-model", detail=detail_block(row, extra) if expandable else ""))
+        detail = detail_block(row, extra, include_signals=include_signals_in_detail) if expandable else ""
+        out.append(list_row(cells, "lgrid-model", detail=detail))
     return "".join(out)
 
 
 def _split_top(rows: list[dict[str, Any]], render, cutoff: int = 5) -> str:
     """精華20 內部再切前 5 與其後。第 1 名與第 20 名的總分常差 10 分以上，
-    第 20 與第 21 名卻只差零點幾分——一視同仁會讓眼睛沒有落點。"""
+    第 20 與第 21 名卻只差零點幾分——一視同仁會讓眼睛沒有落點。
+
+    render 的第二個參數表示展開明細是否包含技術面與籌碼面；第 6–20 名只顯示
+    模型短評，避免把尚未抓取的外部訊號呈現成空白分析。"""
     if len(rows) <= cutoff:
-        return render(rows)
+        return render(rows, True)
     return (
-        render(rows[:cutoff])
+        render(rows[:cutoff], True)
         + f'<div class="groupsep">第 {cutoff + 1}–{len(rows)} 名</div>'
-        + render(rows[cutoff:])
+        + render(rows[cutoff:], False)
     )
 
 
@@ -190,7 +195,13 @@ def build_combined_html(
                 f'<span class="n tot">{float(m.get("total_score") or 0):.1f}</span>',
                 signal_cells(extra),
             ]
-            rows.append(list_row(cells, "lgrid-inter", detail=detail_block(v, extra)))
+            rows.append(
+                list_row(
+                    cells,
+                    "lgrid-inter",
+                    detail=detail_block(v, extra, include_signals=bool(extra)),
+                )
+            )
         if rows:
             intersection = _NOTE_INTERSECTION + _listing(_HEAD_INTERSECTION, "lgrid-inter", "".join(rows))
         else:
@@ -283,14 +294,30 @@ def build_combined_html(
 <section class="panel" id="p-momentum">
   <p class="note">{rank_comparison_note(momentum_comparison)}</p>
   {_LEGEND_MOMENTUM}
-  {_listing(_HEAD_MOMENTUM, "lgrid-model", _split_top(momentum_focus, lambda part: _momentum_rows(part, momentum_comparison, enrichment)))}
+  {_listing(_HEAD_MOMENTUM, "lgrid-model", _split_top(
+      momentum_focus,
+      lambda part, include_signals: _momentum_rows(
+          part,
+          momentum_comparison,
+          enrichment,
+          include_signals_in_detail=include_signals,
+      ),
+  ))}
   {watchlist(momentum_rest, "觀察前100", _listing(_HEAD_MOMENTUM, "lgrid-model", _momentum_rows(momentum_rest, momentum_comparison, enrichment, expandable=False)))}
 </section>
 
 <section class="panel" id="p-value">
   <p class="note">{rank_comparison_note(value_comparison)}</p>
   {_LEGEND_VALUE}
-  {_listing(_HEAD_VALUE, "lgrid-model", _split_top(value_focus, lambda part: _value_rows(part, value_comparison, enrichment)))}
+  {_listing(_HEAD_VALUE, "lgrid-model", _split_top(
+      value_focus,
+      lambda part, include_signals: _value_rows(
+          part,
+          value_comparison,
+          enrichment,
+          include_signals_in_detail=include_signals,
+      ),
+  ))}
   {watchlist(value_rest, "自選100", _listing(_HEAD_VALUE, "lgrid-model", _value_rows(value_rest, value_comparison, enrichment, expandable=False)))}
 </section>
 
