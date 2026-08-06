@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 
@@ -76,6 +77,14 @@ class CombinedReportTests(unittest.TestCase):
         self.assertIn('id="status-value"', page)
         self.assertIn('id="status-momentum"', page)
         self.assertIn("量化排序不是買進建議", page)
+
+    def test_header_shows_taipei_publication_time_to_minute(self) -> None:
+        page = build_combined_html(
+            _result("defensive_value"),
+            _result("operating_momentum"),
+            published_at=datetime.fromisoformat("2026-08-05T08:26:59+08:00"),
+        )
+        self.assertIn("資料發佈 2026-08-05 08:26", page)
 
     def test_tabs_and_row_expansion_work_without_javascript(self) -> None:
         """分頁與逐列展開必須是原生行為：禁用 script 的環境仍要能用。"""
@@ -174,6 +183,22 @@ class CombinedReportTests(unittest.TestCase):
         )
         self.assertIn("本次不產生雙模型交集", page)
         self.assertIn("資料不可比", page)
+
+    def test_header_shows_the_revenue_basis_not_just_the_newest_month(self) -> None:
+        """只印最新月份會讓人以為全市場都換月了；實際上多數公司還在前一個月。"""
+        value = _result("defensive_value")
+        value["metadata"]["revenue_period_distribution"] = {"2026-07": 149, "2026-06": 1704}
+        page = build_combined_html(value, _result("operating_momentum"))
+        self.assertIn("營收基準 2026-06（1,704 家）", page)
+        self.assertIn("149 家已採 2026-07", page)
+        self.assertNotIn("營收期 2026-07", page)
+
+    def test_header_omits_the_ahead_clause_when_the_basis_is_uniform(self) -> None:
+        value = _result("defensive_value")
+        value["metadata"]["revenue_period_distribution"] = {"2026-06": 1853}
+        page = build_combined_html(value, _result("operating_momentum"))
+        self.assertIn("營收基準 2026-06（1,853 家）", page)
+        self.assertNotIn("家已採", page)
 
     def test_portal_is_written_only_as_index_html(self) -> None:
         """入口頁只有一個路徑：同內容再存一份 combined_report.html 沒有人連。"""
