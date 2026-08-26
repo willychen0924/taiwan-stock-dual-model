@@ -14,6 +14,7 @@ import io
 import json
 import re
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
@@ -26,6 +27,9 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
 )
+
+CAPITAL_HISTORY_URL = "https://www.capitalfund.com.tw/CFWeb/api/etf/buyback"
+GOAL_STAR_SHARES_URL = "https://goal-star.com/api/funds/{code}/shares"
 
 
 @dataclass(frozen=True)
@@ -380,6 +384,127 @@ def parse_capital_html(source: ETFSource, raw_html: str) -> dict[str, Any]:
     )
 
 
+def parse_capital_api_json(
+    source: ETFSource, raw_json: str | bytes
+) -> dict[str, Any]:
+    """Parse one dated portfolio returned by Capital's official archive API."""
+
+    raw_text = raw_json.decode("utf-8") if isinstance(raw_json, bytes) else raw_json
+    payload = json.loads(raw_text)
+    if int(payload.get("code") or 0) != 200:
+        raise ValueError(f"Capital archive returned code {payload.get('code')!r}")
+    data = payload.get("data") or {}
+    pcf = data.get("pcf") or {}
+    stocks = data.get("stocks") or []
+    raw_date = str(pcf.get("date1") or "").strip()
+    date_match = re.match(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", raw_date)
+    if not date_match:
+        raise ValueError("portfolio date not found in Capital archive")
+    data_date = date(
+        int(date_match.group(1)),
+        int(date_match.group(2)),
+        int(date_match.group(3)),
+    ).isoformat()
+    try:
+        aum = float(pcf.get("nav") or 0.0)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("fund net assets not found in Capital archive") from exc
+
+    positions: list[dict[str, Any]] = []
+    for item in stocks:
+        stock_id = str(item.get("stocNo") or "").strip()
+        if not re.fullmatch(r"\d{4}", stock_id):
+            continue
+        try:
+            positions.append(
+                {
+                    "stock_id": stock_id,
+                    "stock_name": str(item.get("stocName") or "").strip(),
+                    "shares": int(float(item.get("share") or 0)),
+                    # API weight is a percentage with four decimal places.
+                    "weight": float(item.get("weight") or 0.0) / 100.0,
+                }
+            )
+        except (TypeError, ValueError):
+            continue
+    return _snapshot(
+        source,
+        raw_json,
+        data_date=data_date,
+        aum=aum,
+        positions=_validate_positions(positions),
+    )
+
+
+def parse_goal_star_json(
+    source: ETFSource, raw_json: str | bytes, *, requested_date: date
+) -> dict[str, Any]:
+    """Parse a dated third-party portfolio used only when official history is absent."""
+
+    raw_text = raw_json.decode("utf-8") if isinstance(raw_json, bytes) else raw_json
+    payload = json.loads(raw_text)
+    items = payload.get("items") or []
+    data_dates = {str(item.get("date") or "") for item in items}
+    if data_dates != {requested_date.isoformat()}:
+        raise ValueError(
+            f"Goal Star archive dates {sorted(data_dates)!r} do not match {requested_date}"
+        )
+
+    # Goal Star preserves historical shares and close prices, but issuer weights
+    # are rounded to 0.01 percentage points. Estimate AUM from liquid positions
+    # and use the median so tiny 0.00% radar holdings retain usable precision.
+    estimates = sorted(
+        float(item.get("shares") or 0)
+        * float(item.get("close") or 0)
+        / (float(item.get("ratio") or 0) / 100.0)
+        for item in items
+        if float(item.get("ratio") or 0) >= 1.0
+        and float(item.get("shares") or 0) > 0
+        and float(item.get("close") or 0) > 0
+    )
+    if len(estimates) < 5:
+        raise ValueError("Goal Star archive has insufficient positions to estimate AUM")
+    aum = estimates[len(estimates) // 2]
+    positions: list[dict[str, Any]] = []
+    for item in items:
+        stock_id = str(item.get("stock_symbol") or "").strip()
+        if not re.fullmatch(r"\d{4}", stock_id):
+            continue
+        try:
+            shares = int(float(item.get("shares") or 0))
+            close = float(item.get("close") or 0.0)
+            positions.append(
+                {
+                    "stock_id": stock_id,
+                    "stock_name": str(item.get("stock_name") or "").strip(),
+                    "shares": shares,
+                    "weight": (
+                        shares * close / aum
+                        if shares > 0 and close > 0 and aum > 0
+                        else float(item.get("ratio") or 0.0) / 100.0
+                    ),
+                }
+            )
+        except (TypeError, ValueError):
+            continue
+    snapshot = _snapshot(
+        source,
+        raw_json,
+        data_date=requested_date.isoformat(),
+        aum=aum,
+        positions=_validate_positions(positions),
+    )
+    snapshot.update(
+        {
+            "adapter": "goal_star",
+            "source_url": GOAL_STAR_SHARES_URL.format(code=source.code),
+            "provenance": "third_party",
+            "aum_estimated": True,
+        }
+    )
+    return snapshot
+
+
 def parse_fuhwa_html(source: ETFSource, raw_html: str) -> dict[str, Any]:
     parsed = _flat_html(raw_html)
     text = " ".join(parsed.text)
@@ -511,6 +636,8 @@ def _snapshot(
         "source_html_sha256": hashlib.sha256(
             raw_content.encode("utf-8") if isinstance(raw_content, str) else raw_content
         ).hexdigest(),
+        "provenance": "official",
+        "aum_estimated": False,
         "status": "healthy",
         "error": "",
     }
@@ -532,6 +659,133 @@ def _request(url: str) -> Request:
             "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
         },
     )
+
+
+def _missing_snapshot(source: ETFSource, exc: Exception) -> dict[str, Any]:
+    return {
+        "etf_code": source.code,
+        "etf_name": source.name,
+        "issuer": source.issuer,
+        "adapter": source.adapter,
+        "source_id": source.source_id,
+        "source_url": source.url,
+        "data_date": None,
+        "aum": None,
+        "positions": [],
+        "position_count": 0,
+        "source_html_sha256": "",
+        "provenance": "official",
+        "aum_estimated": False,
+        "status": "missing",
+        "error": f"{type(exc).__name__}: {exc}",
+    }
+
+
+def _capital_history_request(source: ETFSource, requested_date: date) -> Request:
+    body = json.dumps(
+        {"fundId": int(source.source_id), "date": requested_date.strftime("%Y/%m/%d")}
+    ).encode("utf-8")
+    return Request(
+        CAPITAL_HISTORY_URL,
+        data=body,
+        method="POST",
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+            "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.7",
+            "Content-Type": "application/json",
+            "Origin": "https://www.capitalfund.com.tw",
+            "Referer": source.url,
+        },
+    )
+
+
+def fetch_capital_history_snapshots(
+    *,
+    requested_date: date,
+    timeout: int = 15,
+    sources: tuple[ETFSource, ...] | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch a dated 00982A/00992A archive snapshot without using latest HTML."""
+
+    capital_sources = sources or tuple(
+        source for source in ETF_SOURCES if source.adapter == "capital"
+    )
+    snapshots: list[dict[str, Any]] = []
+    for source in capital_sources:
+        try:
+            with build_opener().open(
+                _capital_history_request(source, requested_date), timeout=timeout
+            ) as response:
+                raw_json = response.read()
+            snapshot = parse_capital_api_json(source, raw_json)
+            if snapshot["data_date"] != requested_date.isoformat():
+                raise ValueError(
+                    f"archive date {snapshot['data_date']} does not match {requested_date}"
+                )
+            snapshots.append(snapshot)
+        except Exception as exc:
+            snapshots.append(_missing_snapshot(source, exc))
+    return snapshots
+
+
+def fetch_fuhwa_history_snapshots(
+    *,
+    requested_date: date,
+    timeout: int = 15,
+    sources: tuple[ETFSource, ...] | None = None,
+) -> list[dict[str, Any]]:
+    fuhwa_sources = sources or tuple(
+        source for source in ETF_SOURCES if source.adapter == "fuhwa"
+    )
+    snapshots: list[dict[str, Any]] = []
+    for source in fuhwa_sources:
+        try:
+            url = (
+                f"https://www.fhtrust.com.tw/api/assetsExcel/{source.source_id}/"
+                f"{requested_date.strftime('%Y%m%d')}"
+            )
+            with build_opener().open(_request(url), timeout=timeout) as response:
+                raw_xlsx = response.read()
+            snapshot = parse_fuhwa_xlsx(source, raw_xlsx)
+            if snapshot["data_date"] != requested_date.isoformat():
+                raise ValueError(
+                    f"archive date {snapshot['data_date']} does not match {requested_date}"
+                )
+            snapshots.append(snapshot)
+        except Exception as exc:
+            snapshots.append(_missing_snapshot(source, exc))
+    return snapshots
+
+
+def fetch_goal_star_history_snapshots(
+    *,
+    requested_date: date,
+    timeout: int = 15,
+    sources: tuple[ETFSource, ...] | None = None,
+) -> list[dict[str, Any]]:
+    unified_sources = sources or tuple(
+        source for source in ETF_SOURCES if source.adapter == "unified"
+    )
+
+    def fetch_one(source: ETFSource) -> dict[str, Any]:
+        try:
+            url = (
+                f"{GOAL_STAR_SHARES_URL.format(code=source.code)}"
+                f"?date={requested_date.isoformat()}"
+            )
+            request = _request(url)
+            request.add_header("Accept", "application/json")
+            with build_opener().open(request, timeout=timeout) as response:
+                raw_json = response.read()
+            return parse_goal_star_json(
+                source, raw_json, requested_date=requested_date
+            )
+        except Exception as exc:
+            return _missing_snapshot(source, exc)
+
+    with ThreadPoolExecutor(max_workers=max(1, len(unified_sources))) as pool:
+        return list(pool.map(fetch_one, unified_sources))
 
 
 def fetch_official_snapshots(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import shutil
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -87,7 +88,14 @@ def _detail(row: dict[str, Any]) -> str:
     detail_rows = []
     for item in row["details"]:
         state = str(item["state"])
-        position_change = "新建" if item.get("stock_weight") and item.get("pos_5d") is None else _change(item.get("pos_5d"))
+        if state == "missing":
+            position_change = "資料不足"
+        elif state == "unheld":
+            position_change = "—"
+        elif item.get("pos_5d") is None:
+            position_change = "歷史不足"
+        else:
+            position_change = _change(item.get("pos_5d"))
         tone = "hot" if item.get("contributor") and state in {"start", "confirm", "post_turn"} else "neu"
         if state in {"missing", "decline_tail", "residual"}:
             tone = "hot" if state != "missing" else "neu"
@@ -164,24 +172,22 @@ def _listing(rows: list[dict[str, Any]], codes: list[str]) -> str:
 
 def _excluded(result: dict[str, Any]) -> str:
     rows = result["excluded"]
-    body = []
+    counts: Counter[str] = Counter()
     for row in rows:
-        reason = "、".join(row["reasons"])
-        change = "—" if row.get("pos_5d") is None else f'{float(row["pos_5d"]):+.0%}'
-        body.append(
-            '<div class="exrow">'
-            f'<span class="mono">{esc(row["stock_id"])}</span>'
-            f'<span class="nm">{esc(row["stock_name"])}</span>'
-            f'<span class="why">{esc(reason)}</span>'
-            f'<span class="dn">5 日標準化部位 {esc(change)}</span>'
-            f'<span class="tag">{esc(reason.split("、")[0])}</span>'
-            '</div>'
-        )
-    empty = '<p class="empty">本日沒有已排除或資料不足的候選。</p>' if not body else ""
+        counts.update(str(reason) for reason in row.get("reasons", []))
+    order = ["減碼尾倉", "配股殘留", "非低部位", "資料不足"]
+    labels = [reason for reason in order if counts[reason]]
+    labels.extend(sorted(reason for reason in counts if reason not in order))
+    categories = "".join(
+        f'<span class="excat"><b>{esc(reason)}</b><i>{counts[reason]}</i></span>'
+        for reason in labels
+    )
+    if not categories:
+        categories = '<span class="exnone">本日無排除項目</span>'
     return (
-        '<div class="exbox"><div class="exhead"><h3>已排除與資料不足</h3>'
-        f'<span>{len(rows)} 筆 · 不進入雷達排序</span></div>'
-        f'<div class="exwrap">{empty}{"".join(body)}</div></div>'
+        '<div class="exbox"><div class="exhead"><h3>排除分類</h3>'
+        f'<span>{len(rows)} 檔 · 不進入排序</span></div>'
+        f'<div class="exsummary">{categories}</div></div>'
     )
 
 
@@ -204,11 +210,12 @@ def _extra_css() -> str:
 .subt td{padding:6px 0;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
 .subt tr:last-child td{border-bottom:none}.subt td.f{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
 .subt td.neu{color:var(--muted)}.subt td.hot{color:#b8452a;font-weight:700}
-.exbox{margin-top:22px;border:1px solid var(--line2);border-left:3px solid var(--faint);border-radius:6px;background:var(--surface);overflow:hidden}
-.exhead{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:12px 16px;border-bottom:1px solid var(--line2)}
+.exbox{margin-top:16px;border:1px solid var(--line2);border-left:3px solid var(--faint);border-radius:6px;background:var(--surface);display:flex;align-items:center;gap:16px;padding:10px 14px}
+.exhead{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
 .exhead h3{margin:0;font-size:13px;color:var(--active);font-weight:600;letter-spacing:.02em}.exhead span{font-size:11.5px;color:#b8452a;font-weight:600;white-space:nowrap}
-.exwrap{padding:2px 16px 8px;overflow-x:auto}.exrow{display:grid;grid-template-columns:64px 96px minmax(190px,1fr) 150px 84px;gap:16px;padding:9px 0;border-bottom:1px solid var(--line);align-items:baseline;min-width:620px}
-.exrow:last-child{border-bottom:none}.exrow .why{color:var(--ink2);font-size:12px}.exrow .dn{text-align:right;font-variant-numeric:tabular-nums;color:#b8452a;font-size:12px}.exrow .tag{color:var(--muted);font-size:11.5px}
+.exsummary{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.excat{display:inline-flex;align-items:center;gap:7px;padding:4px 8px;border:1px solid var(--line2);border-radius:999px;background:var(--page);font-size:11.5px;color:var(--ink2)}
+.excat b{font-weight:600}.excat i{font-style:normal;color:#b8452a;font-weight:700;font-variant-numeric:tabular-nums}.exnone{font-size:11.5px;color:var(--muted)}
+@media(max-width:760px){.exbox{align-items:flex-start;flex-direction:column;gap:7px}.exhead{width:100%;justify-content:space-between}}
 """
 
 
@@ -222,7 +229,13 @@ def build_etf_radar_html(
     missing_codes = [code for code, value in meta["sources"].items() if value["status"] != "healthy"]
     history_days = int(meta.get("history_days") or 0)
     warmup = int(meta.get("warmup_trading_days") or 6)
-    warning = healthy < total or history_days <= warmup
+    history_by_etf = {
+        code: int(value)
+        for code, value in (meta.get("history_days_by_etf") or {}).items()
+    }
+    if not history_by_etf:
+        history_by_etf = {code: history_days for code in meta["sources"]}
+    warning = healthy < total or min(history_by_etf.values(), default=0) <= warmup
     status_class = "warn" if warning else ""
     status_text = f"揭露 {healthy}/{total}"
     published_at = published_at or datetime.now(ZoneInfo("Asia/Taipei"))
@@ -246,11 +259,22 @@ def build_etf_radar_html(
             f'{_listing(extra_low, codes)}</details>'
         )
     missing_text = f'<em>·</em> {esc("、".join(missing_codes))} 缺失' if missing_codes else ""
-    warmup_text = (
-        f'<em>·</em> 冷啟動 {history_days}/{warmup + 1} 日'
-        if history_days <= warmup
-        else f'<em>·</em> 歷史 {history_days} 日'
-    )
+    history_groups: dict[int, list[str]] = {}
+    for code in codes:
+        history_groups.setdefault(history_by_etf.get(code, 0), []).append(code.lstrip("0"))
+    if len(history_groups) == 1:
+        only_days = next(iter(history_groups))
+        history_label = (
+            f"冷啟動 {only_days}/{warmup + 1} 日"
+            if only_days <= warmup
+            else f"歷史 {only_days} 日"
+        )
+    else:
+        history_label = "歷史 " + "；".join(
+            f'{"/".join(group_codes)} {days_count} 日'
+            for days_count, group_codes in history_groups.items()
+        )
+    warmup_text = f'<em>·</em> {esc(history_label)}'
     navigation = period_navigation(
         "radar",
         radar_href="index.html",
@@ -262,6 +286,18 @@ def build_etf_radar_html(
         f'{code} {_percent(meta["weights"].get(code), 1)}' for code in codes
     )
     provisional = "（暫定；尚未累積滿 20 個交易日）" if meta.get("weights_provisional") else ""
+    third_party_codes = [
+        code
+        for code in codes
+        if "third_party" in (meta.get("history_provenance_by_etf") or {}).get(code, [])
+    ]
+    history_source_note = ""
+    if third_party_codes:
+        history_source_note = (
+            '<p class="foot"><b>歷史補值</b>　'
+            f'{esc("／".join(third_party_codes))} 的官方歷史缺口由 Goal Star '
+            "公開資料補齊；最新資料與同日衝突一律以投信官方為準。</p>"
+        )
     pool_count = int(meta.get("observation_pool_count") or len(low_rows))
     candidate_limit = int(meta.get("observation_candidate_limit") or 15)
     pool_text = (
@@ -291,6 +327,7 @@ def build_etf_radar_html(
 <p class="foot"><b>投信去重</b>　統一旗下 00981A／00403A、群益旗下 00982A／00992A 各併計為一家；跨投信才視為獨立確認。</p>
 <p class="foot"><b>雷達權重 {esc(meta['weight_version'])}</b>　{esc(weight_text)}。依近 20 個交易日 AUM 中位數平方根正規化，只用於同級排序，不是分數。{esc(provisional)}</p>
 <p class="foot"><b>更新與時效</b>　每個交易日盤後擷取官方完整投資組合，建議於次日上午 08:00–08:30 閱讀。PCF 為 T 日盤後揭露，本頁最快只能在 T+1 跟進 T 日動作；來源缺失時顯示「缺」，不沿用舊值。</p>
+{history_source_note}
 <p class="foot"><b>證據等級</b>　「低部位＝經理人試單」是市場觀察，不是可驗證事實。小部位仍可能來自配股、轉換或調整過渡。主動式 ETF 歷史短，訊號尚無足夠樣本回測。本頁是觀察工具，不是選股模型，也不寫入雙模型排名歷史。量化排序不是買進建議。</p></div>
 </section></div></body></html>"""
 

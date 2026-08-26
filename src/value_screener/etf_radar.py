@@ -11,13 +11,19 @@ import json
 import math
 import shutil
 from collections import Counter
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .etf_radar_sources import ETF_SOURCES, fetch_official_snapshots
+from .etf_radar_sources import (
+    ETF_SOURCES,
+    fetch_capital_history_snapshots,
+    fetch_fuhwa_history_snapshots,
+    fetch_goal_star_history_snapshots,
+    fetch_official_snapshots,
+)
 
 
 SIGNAL_ORDER = {
@@ -127,12 +133,23 @@ def normalize_snapshot_day(
     }
 
 
+def _raw_snapshot_path(
+    root: Path, code: str, data_date: str, snapshot: dict[str, Any]
+) -> Path:
+    suffix = (
+        ".json"
+        if snapshot.get("provenance", "official") == "official"
+        else ".third_party.json"
+    )
+    return root / "data" / "raw" / "etf_pcf" / code / f"{data_date}{suffix}"
+
+
 def save_snapshot_day(root: Path, day: dict[str, Any]) -> Path:
     data_date = str(day["data_date"])
     for code, snapshot in day["snapshots"].items():
         if snapshot.get("status") != "healthy":
             continue
-        raw_path = root / "data" / "raw" / "etf_pcf" / code / f"{data_date}.json"
+        raw_path = _raw_snapshot_path(root, code, data_date, snapshot)
         if not raw_path.exists():
             _json_dump(raw_path, snapshot)
     processed = root / "data" / "processed" / "etf_radar" / data_date / "positions.json"
@@ -154,6 +171,157 @@ def load_snapshot_days(root: Path, *, through: str | None = None) -> list[dict[s
         if data_date and (through is None or data_date <= through):
             days[data_date] = value
     return [days[key] for key in sorted(days)]
+
+
+def merge_snapshot_day(root: Path, day: dict[str, Any]) -> Path:
+    """Add newly available archives without replacing an already healthy snapshot."""
+
+    data_date = str(day["data_date"])
+    processed = root / "data" / "processed" / "etf_radar" / data_date / "positions.json"
+    if not processed.exists():
+        return save_snapshot_day(root, day)
+    try:
+        merged = json.loads(processed.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return save_snapshot_day(root, day)
+    if str(merged.get("data_date") or "") != data_date:
+        raise ValueError(f"snapshot date mismatch at {processed}")
+
+    merged_snapshots = merged.setdefault("snapshots", {})
+    for code, incoming in day.get("snapshots", {}).items():
+        current = merged_snapshots.get(code) or {}
+        if incoming.get("status") != "healthy":
+            continue
+        current_priority = (
+            2 if current.get("provenance", "official") == "official" else 1
+        )
+        incoming_priority = (
+            2 if incoming.get("provenance", "official") == "official" else 1
+        )
+        if current.get("status") == "healthy" and current_priority >= incoming_priority:
+            continue
+        merged_snapshots[code] = incoming
+        raw_path = _raw_snapshot_path(root, code, data_date, incoming)
+        if not raw_path.exists():
+            _json_dump(raw_path, incoming)
+    healthy = sum(
+        (merged_snapshots.get(source.code) or {}).get("status") == "healthy"
+        for source in ETF_SOURCES
+    )
+    merged["coverage"] = {"healthy": healthy, "total": len(ETF_SOURCES)}
+    _json_dump(processed, merged)
+    return processed
+
+
+def backfill_capital_history(
+    root: Path,
+    *,
+    through_date: date,
+    target_trading_days: int = 20,
+    fetcher=fetch_capital_history_snapshots,
+) -> dict[str, int]:
+    """Fill the official 00982A/00992A archive until both have enough history."""
+
+    capital_codes = [source.code for source in ETF_SOURCES if source.adapter == "capital"]
+    healthy_dates: dict[str, set[str]] = {code: set() for code in capital_codes}
+    for day in load_snapshot_days(root, through=through_date.isoformat()):
+        for code in capital_codes:
+            snapshot = (day.get("snapshots") or {}).get(code) or {}
+            if snapshot.get("status") == "healthy":
+                healthy_dates[code].add(str(day["data_date"]))
+    if all(len(values) >= target_trading_days for values in healthy_dates.values()):
+        return {code: len(values) for code, values in healthy_dates.items()}
+
+    candidate = through_date - timedelta(days=1)
+    attempts = 0
+    empty_weekdays = 0
+    max_attempts = max(30, target_trading_days * 3)
+    while (
+        not all(len(values) >= target_trading_days for values in healthy_dates.values())
+        and attempts < max_attempts
+        and empty_weekdays < 6
+    ):
+        if candidate.weekday() >= 5:
+            candidate -= timedelta(days=1)
+            continue
+        wanted = [
+            source
+            for source in ETF_SOURCES
+            if source.code in capital_codes
+            and candidate.isoformat() not in healthy_dates[source.code]
+        ]
+        if not wanted:
+            candidate -= timedelta(days=1)
+            continue
+        attempts += 1
+        snapshots = fetcher(requested_date=candidate, sources=tuple(wanted))
+        healthy = [
+            snapshot
+            for snapshot in snapshots
+            if snapshot.get("status") == "healthy"
+            and snapshot.get("data_date") == candidate.isoformat()
+        ]
+        if healthy:
+            archive_day = normalize_snapshot_day(healthy, requested_as_of=candidate)
+            merge_snapshot_day(root, archive_day)
+            for snapshot in healthy:
+                code = str(snapshot["etf_code"])
+                if code in healthy_dates:
+                    healthy_dates[code].add(candidate.isoformat())
+            empty_weekdays = 0
+        else:
+            empty_weekdays += 1
+        candidate -= timedelta(days=1)
+    return {code: len(values) for code, values in healthy_dates.items()}
+
+
+def backfill_history_on_known_dates(
+    root: Path,
+    *,
+    through_date: date,
+    codes: tuple[str, ...],
+    fetcher,
+    target_trading_days: int = 20,
+    max_calendar_lookback: int | None = None,
+) -> dict[str, int]:
+    """Fill source-specific archives on trading dates already verified by official PCF."""
+
+    days = load_snapshot_days(root, through=through_date.isoformat())[-target_trading_days:]
+    source_by_code = {source.code: source for source in ETF_SOURCES}
+    for historical_day in reversed(days):
+        data_date = date.fromisoformat(str(historical_day["data_date"]))
+        if (
+            max_calendar_lookback is not None
+            and (through_date - data_date).days > max_calendar_lookback
+        ):
+            continue
+        wanted = []
+        for code in codes:
+            snapshot = (historical_day.get("snapshots") or {}).get(code) or {}
+            if snapshot.get("status") != "healthy":
+                wanted.append(source_by_code[code])
+        if not wanted:
+            continue
+        snapshots = fetcher(requested_date=data_date, sources=tuple(wanted))
+        healthy = [
+            snapshot
+            for snapshot in snapshots
+            if snapshot.get("status") == "healthy"
+            and snapshot.get("data_date") == data_date.isoformat()
+        ]
+        if healthy:
+            archive_day = normalize_snapshot_day(healthy, requested_as_of=data_date)
+            merge_snapshot_day(root, archive_day)
+
+    counts = {code: 0 for code in codes}
+    for historical_day in load_snapshot_days(
+        root, through=through_date.isoformat()
+    )[-target_trading_days:]:
+        for code in codes:
+            snapshot = (historical_day.get("snapshots") or {}).get(code) or {}
+            if snapshot.get("status") == "healthy":
+                counts[code] += 1
+    return counts
 
 
 def _aum_medians(days: list[dict[str, Any]], lookback: int = 20) -> dict[str, float]:
@@ -209,9 +377,31 @@ def choose_radar_weights(
         if str(last.get("weight_month") or "") == month and previous_ranking == ranking:
             weights = {str(key): float(value) for key, value in (last.get("weights") or {}).items()}
             if weights:
-                return str(last.get("weight_version") or month), weights, medians, len(days) < 20
+                samples = {
+                    source.code: sum(
+                        ((day.get("snapshots") or {}).get(source.code) or {}).get("status")
+                        == "healthy"
+                        for day in days[-20:]
+                    )
+                    for source in ETF_SOURCES
+                }
+                return (
+                    str(last.get("weight_version") or month),
+                    weights,
+                    medians,
+                    any(count < 20 for count in samples.values()),
+                )
     suffix = "-rank-change" if last and str(last.get("weight_month") or "") == month else ""
-    return f"{month}{suffix}", computed, medians, len(days) < 20
+    samples = {
+        source.code: sum(
+            ((day.get("snapshots") or {}).get(source.code) or {}).get("status") == "healthy"
+            for day in days[-20:]
+        )
+        for source in ETF_SOURCES
+    }
+    return f"{month}{suffix}", computed, medians, any(
+        count < 20 for count in samples.values()
+    )
 
 
 def _positions(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -603,12 +793,32 @@ def build_radar_result(
     excluded.sort(key=lambda row: (row["reasons"], row["stock_id"]))
     latest = days[-1]
     code_order = sorted(codes, key=lambda code: (-weights.get(code, 0.0), code))
+    history_days_by_etf = {}
+    history_provenance_by_etf = {}
+    for code in codes:
+        consecutive = 0
+        for day in reversed(days):
+            snapshot = (day.get("snapshots") or {}).get(code) or {}
+            if snapshot.get("status") != "healthy":
+                break
+            consecutive += 1
+        history_days_by_etf[code] = consecutive
+        history_provenance_by_etf[code] = sorted(
+            {
+                str(snapshot.get("provenance") or "official")
+                for day in days
+                for snapshot in [(day.get("snapshots") or {}).get(code) or {}]
+                if snapshot.get("status") == "healthy"
+            }
+        )
     return {
         "metadata": {
             "data_date": latest["data_date"],
             "requested_as_of": latest.get("requested_as_of"),
             "coverage": latest.get("coverage"),
             "history_days": len(days),
+            "history_days_by_etf": history_days_by_etf,
+            "history_provenance_by_etf": history_provenance_by_etf,
             "warmup_trading_days": int(config["warmup_trading_days"]),
             "primary_observation_limit": int(config.get("low_observation_limit", 10)),
             "observation_candidate_limit": candidate_limit,
@@ -674,11 +884,33 @@ def run_etf_radar_data(
     requested_as_of: date,
     config_path: Path,
     fetcher=fetch_official_snapshots,
+    history_fetcher=fetch_capital_history_snapshots,
+    fuhwa_history_fetcher=fetch_fuhwa_history_snapshots,
+    fallback_history_fetcher=fetch_goal_star_history_snapshots,
 ) -> dict[str, Any]:
     config = load_etf_radar_config(config_path)
     snapshots = fetcher(requested_as_of=requested_as_of)
     day = normalize_snapshot_day(snapshots, requested_as_of=requested_as_of)
     save_snapshot_day(root, day)
+    backfill_capital_history(
+        root,
+        through_date=date.fromisoformat(str(day["data_date"])),
+        target_trading_days=20,
+        fetcher=history_fetcher,
+    )
+    backfill_history_on_known_dates(
+        root,
+        through_date=date.fromisoformat(str(day["data_date"])),
+        codes=("00991A",),
+        fetcher=fuhwa_history_fetcher,
+    )
+    backfill_history_on_known_dates(
+        root,
+        through_date=date.fromisoformat(str(day["data_date"])),
+        codes=tuple(source.code for source in ETF_SOURCES),
+        fetcher=fallback_history_fetcher,
+        max_calendar_lookback=10,
+    )
     days = load_snapshot_days(root, through=str(day["data_date"]))
     history_path = root / "data" / "processed" / "etf_radar_history.jsonl"
     version, weights, medians, provisional = choose_radar_weights(

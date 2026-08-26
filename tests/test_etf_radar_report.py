@@ -102,10 +102,67 @@ class ETFRadarReportTests(unittest.TestCase):
         self.assertIn('class="etfc miss" title="資料不足">缺</span>', page)
         self.assertNotIn(">?</span>", page)
 
+    def test_unheld_position_does_not_claim_history_is_missing(self) -> None:
+        page = self._page()
+        self.assertIn('<td class="neu">—</td><td>未持有</td>', page)
+        self.assertNotIn('>資料不足</td><td>未持有</td>', page)
+
     def test_radar_is_explicitly_separate_from_score_and_hard_gates(self) -> None:
         page = self._page()
         self.assertIn("不使用、也不影響雙模型的 100 分評分與硬門檻", page)
         self.assertNotIn("雷達總分", page)
+
+    def test_exclusions_are_compact_categories_without_stock_rows(self) -> None:
+        days = _days({})[:1]
+        days[0]["snapshots"]["00981A"]["positions"] = [
+            {
+                "stock_id": "1111",
+                "stock_name": "配股測試",
+                "shares": 1500,
+                "weight": 0.001,
+            },
+            {
+                "stock_id": "2222",
+                "stock_name": "重倉測試",
+                "shares": 1000,
+                "weight": 0.02,
+            },
+        ]
+        result = build_radar_result(
+            days,
+            CONFIG,
+            weights=WEIGHTS,
+            weight_version="2026-08",
+            aum_medians={code: 1.0 for code in WEIGHTS},
+            provisional_weights=True,
+        )
+        page = build_etf_radar_html(result)
+        self.assertIn("排除分類", page)
+        self.assertIn("配股殘留", page)
+        self.assertIn("非低部位", page)
+        self.assertNotIn('class="exrow"', page)
+        self.assertNotIn("配股測試", page)
+        self.assertNotIn("重倉測試", page)
+
+    def test_header_shows_history_per_etf_when_only_capital_is_backfilled(self) -> None:
+        result = build_radar_result(
+            _days({}),
+            CONFIG,
+            weights=WEIGHTS,
+            weight_version="2026-08",
+            aum_medians={code: 1.0 for code in WEIGHTS},
+            provisional_weights=True,
+        )
+        result["metadata"]["history_days_by_etf"] = {
+            "00981A": 1,
+            "00403A": 1,
+            "00991A": 1,
+            "00982A": 20,
+            "00992A": 20,
+        }
+        page = build_etf_radar_html(result)
+        self.assertIn("981A/403A/991A 1 日", page)
+        self.assertIn("982A/992A 20 日", page)
 
 
 if __name__ == "__main__":

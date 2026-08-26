@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
@@ -9,7 +10,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from value_screener.etf_radar import build_radar_result  # noqa: E402
+from value_screener.etf_radar import (  # noqa: E402
+    backfill_capital_history,
+    build_radar_result,
+    load_snapshot_days,
+    merge_snapshot_day,
+    normalize_snapshot_day,
+    save_snapshot_day,
+)
 from value_screener.etf_radar_sources import ETF_SOURCES  # noqa: E402
 
 
@@ -183,6 +191,84 @@ class ETFRadarSignalTests(unittest.TestCase):
         row = result["rows"][0]
         self.assertEqual(row["cells"]["00992A"]["text"], "缺")
         self.assertNotIn("00992A", row["contributors"])
+
+
+class ETFRadarBackfillTests(unittest.TestCase):
+    @staticmethod
+    def _capital_snapshot(code: str, data_date: date) -> dict:
+        source = next(item for item in ETF_SOURCES if item.code == code)
+        return {
+            "etf_code": source.code,
+            "etf_name": source.name,
+            "issuer": source.issuer,
+            "adapter": source.adapter,
+            "source_id": source.source_id,
+            "source_url": source.url,
+            "data_date": data_date.isoformat(),
+            "aum": 10_000_000_000,
+            "positions": [],
+            "position_count": 0,
+            "source_html_sha256": "fixture",
+            "status": "healthy",
+            "error": "",
+        }
+
+    def test_capital_backfill_skips_weekend_and_reaches_target(self) -> None:
+        through = date(2026, 8, 25)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            latest = normalize_snapshot_day(
+                [self._capital_snapshot(code, through) for code in ("00982A", "00992A")],
+                requested_as_of=through,
+            )
+            save_snapshot_day(root, latest)
+            requested: list[date] = []
+
+            def fake_fetcher(
+                *, requested_date: date, sources: tuple | None = None
+            ) -> list[dict]:
+                requested.append(requested_date)
+                return [
+                    self._capital_snapshot(code, requested_date)
+                    for code in [source.code for source in sources or ()]
+                ]
+
+            counts = backfill_capital_history(
+                root,
+                through_date=through,
+                target_trading_days=3,
+                fetcher=fake_fetcher,
+            )
+            self.assertEqual(counts, {"00982A": 3, "00992A": 3})
+            self.assertEqual(requested, [date(2026, 8, 24), date(2026, 8, 21)])
+            self.assertEqual(
+                [day["data_date"] for day in load_snapshot_days(root)],
+                ["2026-08-21", "2026-08-24", "2026-08-25"],
+            )
+
+    def test_official_snapshot_replaces_third_party_for_the_same_date(self) -> None:
+        data_date = date(2026, 8, 25)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            third_party = self._capital_snapshot("00982A", data_date)
+            third_party["provenance"] = "third_party"
+            third_party["aum"] = 9_000_000_000
+            save_snapshot_day(
+                root,
+                normalize_snapshot_day([third_party], requested_as_of=data_date),
+            )
+            official = self._capital_snapshot("00982A", data_date)
+            official["provenance"] = "official"
+            merge_snapshot_day(
+                root,
+                normalize_snapshot_day([official], requested_as_of=data_date),
+            )
+            snapshot = load_snapshot_days(root)[0]["snapshots"]["00982A"]
+            self.assertEqual(snapshot["provenance"], "official")
+            self.assertEqual(snapshot["aum"], 10_000_000_000)
+            raw = root / "data" / "raw" / "etf_pcf" / "00982A"
+            self.assertTrue((raw / "2026-08-25.third_party.json").exists())
+            self.assertTrue((raw / "2026-08-25.json").exists())
 
 
 if __name__ == "__main__":

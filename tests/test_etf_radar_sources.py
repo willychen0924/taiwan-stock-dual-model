@@ -6,6 +6,7 @@ import json
 import sys
 import unittest
 import zipfile
+from datetime import date
 from pathlib import Path
 
 
@@ -14,9 +15,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from value_screener.etf_radar_sources import (  # noqa: E402
     ETF_SOURCES,
+    parse_capital_api_json,
     parse_capital_html,
     parse_fuhwa_html,
     parse_fuhwa_xlsx,
+    parse_goal_star_json,
     parse_unified_html,
 )
 
@@ -124,6 +127,73 @@ class ETFRadarSourceTests(unittest.TestCase):
         self.assertEqual(result["issuer"], "群益")
         self.assertEqual(result["position_count"], 5)
         self.assertEqual(result["data_date"], "2026-08-25")
+
+    def test_capital_archive_api_parser_preserves_weight_precision(self) -> None:
+        source = next(item for item in ETF_SOURCES if item.code == "00982A")
+        stocks = [
+            {
+                "stocNo": code,
+                "stocName": name,
+                "weight": weight,
+                "share": shares,
+            }
+            for code, name, weight, shares in [
+                ("2330", "台積電", 8.5449, 1_794_000),
+                ("2454", "聯發科", 6.7956, 872_000),
+                ("4958", "臻鼎-KY", 0.1191, 42_000),
+                ("3443", "創意", 0.0107, 1_000),
+                ("8046", "南電", 0.0023, 1_000),
+            ]
+        ]
+        raw_json = json.dumps(
+            {
+                "code": 200,
+                "data": {
+                    "pcf": {"date1": "2026-08-20", "nav": 49_337_861_148},
+                    "stocks": stocks,
+                },
+            }
+        )
+        result = parse_capital_api_json(source, raw_json)
+        self.assertEqual(result["data_date"], "2026-08-20")
+        self.assertEqual(result["position_count"], 5)
+        low = next(item for item in result["positions"] if item["stock_id"] == "8046")
+        self.assertEqual(low["shares"], 1000)
+        self.assertAlmostEqual(low["weight"], 0.000023)
+
+    def test_goal_star_archive_reconstructs_tiny_weight_and_marks_provenance(self) -> None:
+        source = next(item for item in ETF_SOURCES if item.code == "00981A")
+        items = [
+            {
+                "date": "2026-08-20",
+                "stock_symbol": str(2300 + index),
+                "stock_name": f"主要持股{index}",
+                "shares": 1_000_000,
+                "ratio": "1.000000",
+                "close": "100.0000",
+            }
+            for index in range(5)
+        ]
+        items.append(
+            {
+                "date": "2026-08-20",
+                "stock_symbol": "4958",
+                "stock_name": "臻鼎-KY",
+                "shares": 1_000,
+                "ratio": "0.000000",
+                "close": "100.0000",
+            }
+        )
+        result = parse_goal_star_json(
+            source,
+            json.dumps({"items": items, "total": len(items)}),
+            requested_date=date(2026, 8, 20),
+        )
+        low = next(item for item in result["positions"] if item["stock_id"] == "4958")
+        self.assertAlmostEqual(result["aum"], 10_000_000_000)
+        self.assertAlmostEqual(low["weight"], 0.00001)
+        self.assertEqual(result["provenance"], "third_party")
+        self.assertTrue(result["aum_estimated"])
 
     def test_fuhwa_parser_uses_asset_table_not_pcf_cash_table(self) -> None:
         source = next(item for item in ETF_SOURCES if item.code == "00991A")
