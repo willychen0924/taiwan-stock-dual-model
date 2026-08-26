@@ -17,6 +17,7 @@ NODE_BIN="${NODE_BIN:-$DEFAULT_NODE}"
 cd "$ROOT"
 "$PYTHON_BIN" scripts/run_screen.py --as-of "$AS_OF" "$@"
 "$PYTHON_BIN" scripts/update_rankings_history.py
+"$PYTHON_BIN" scripts/build_etf_radar.py --as-of "$AS_OF"
 if ! "$PYTHON_BIN" scripts/build_technical_chip_enrichment.py --as-of "$AS_OF" --top-n 5; then
   print -u2 "警告：技術面／籌碼面更新失敗；基本面模型與排名歷史已完成，報表將顯示既有資料或 —。"
 fi

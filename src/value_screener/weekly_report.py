@@ -685,6 +685,7 @@ def build_weekly_html(
         daily_href="../../latest/index.html",
         weekly_href="index.html",
         monthly_href=None,
+        radar_href="../../etf_radar/latest/index.html",
     )
     css = portal_css() + """
 .n,.number{text-align:right;font-variant-numeric:tabular-nums}

@@ -5,9 +5,10 @@ ROOT="${PROJECT_ROOT:-${0:A:h:h}}"
 AS_OF="${1:-$(date +%F)}"
 DAILY_SOURCE="$ROOT/reports/latest/index.html"
 WEEKLY_SOURCE="$ROOT/reports/weekly/latest/index.html"
+ETF_RADAR_SOURCE="$ROOT/reports/etf_radar/latest/index.html"
 ROOT_TEMPLATE="$ROOT/docs/github_pages_index.html"
 
-for required in "$DAILY_SOURCE" "$WEEKLY_SOURCE" "$ROOT_TEMPLATE"; do
+for required in "$DAILY_SOURCE" "$ETF_RADAR_SOURCE" "$ROOT_TEMPLATE"; do
   if [[ ! -f "$required" ]]; then
     print -u2 "GitHub Pages 發布失敗：找不到 $required"
     exit 1
@@ -38,13 +39,20 @@ else
   git -C "$SITE_ROOT" remote add origin "$REMOTE_URL"
 fi
 
-mkdir -p "$SITE_ROOT/reports/latest" "$SITE_ROOT/reports/weekly/latest"
+mkdir -p "$SITE_ROOT/reports/latest"
+mkdir -p "$SITE_ROOT/reports/etf_radar/latest"
 cp "$ROOT_TEMPLATE" "$SITE_ROOT/index.html"
 cp "$DAILY_SOURCE" "$SITE_ROOT/reports/latest/index.html"
-cp "$WEEKLY_SOURCE" "$SITE_ROOT/reports/weekly/latest/index.html"
+cp "$ETF_RADAR_SOURCE" "$SITE_ROOT/reports/etf_radar/latest/index.html"
+if [[ -f "$WEEKLY_SOURCE" ]]; then
+  mkdir -p "$SITE_ROOT/reports/weekly/latest"
+  cp "$WEEKLY_SOURCE" "$SITE_ROOT/reports/weekly/latest/index.html"
+fi
 touch "$SITE_ROOT/.nojekyll"
 
-git -C "$SITE_ROOT" add .nojekyll index.html reports/latest/index.html reports/weekly/latest/index.html
+git -C "$SITE_ROOT" add .nojekyll index.html reports/latest/index.html \
+  reports/etf_radar/latest/index.html reports/weekly/latest/index.html 2>/dev/null || \
+  git -C "$SITE_ROOT" add .nojekyll index.html reports/latest/index.html reports/etf_radar/latest/index.html
 if git -C "$SITE_ROOT" diff --cached --quiet; then
   print "GitHub Pages：內容沒有變更，略過推送。"
   exit 0
@@ -56,4 +64,4 @@ git -C "$SITE_ROOT" config user.name "${AUTHOR_NAME:-Taiwan Stock Report Bot}"
 git -C "$SITE_ROOT" config user.email "${AUTHOR_EMAIL:-report-bot@users.noreply.github.com}"
 git -C "$SITE_ROOT" commit --quiet -m "Publish reports $AS_OF"
 git -C "$SITE_ROOT" push --quiet origin gh-pages
-print "GitHub Pages：已發布日報與週報（$AS_OF）。"
+print "GitHub Pages：已發布 ETF 雷達、雙模型日報與最新週報（$AS_OF）。"

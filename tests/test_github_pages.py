@@ -23,7 +23,7 @@ def run(*args: str, cwd: Path, env: dict[str, str] | None = None) -> subprocess.
 
 
 class GithubPagesPublishTests(unittest.TestCase):
-    def test_publisher_pushes_only_latest_html_and_is_idempotent(self) -> None:
+    def test_publisher_pushes_latest_daily_and_weekly_html_and_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             project = temp / "project"
@@ -31,10 +31,14 @@ class GithubPagesPublishTests(unittest.TestCase):
             checkout = temp / "checkout"
             (project / "reports" / "latest").mkdir(parents=True)
             (project / "reports" / "weekly" / "latest").mkdir(parents=True)
+            (project / "reports" / "etf_radar" / "latest").mkdir(parents=True)
             (project / "docs").mkdir()
             (project / "reports" / "latest" / "index.html").write_text("daily", encoding="utf-8")
             (project / "reports" / "weekly" / "latest" / "index.html").write_text(
                 "weekly", encoding="utf-8"
+            )
+            (project / "reports" / "etf_radar" / "latest" / "index.html").write_text(
+                "radar", encoding="utf-8"
             )
             (project / "docs" / "github_pages_index.html").write_text("root", encoding="utf-8")
             (project / ".env").write_text("FINMIND_TOKEN=secret", encoding="utf-8")
@@ -53,7 +57,7 @@ class GithubPagesPublishTests(unittest.TestCase):
                 cwd=project,
                 env=env,
             )
-            self.assertIn("已發布日報與週報", first.stdout)
+            self.assertIn("已發布 ETF 雷達、雙模型日報與最新週報", first.stdout)
 
             run("git", "clone", "--quiet", "--branch", "gh-pages", str(remote), str(checkout), cwd=temp)
             published = sorted(
@@ -66,11 +70,20 @@ class GithubPagesPublishTests(unittest.TestCase):
                 [
                     ".nojekyll",
                     "index.html",
+                    "reports/etf_radar/latest/index.html",
                     "reports/latest/index.html",
                     "reports/weekly/latest/index.html",
                 ],
             )
             self.assertEqual((checkout / "reports" / "latest" / "index.html").read_text(), "daily")
+            self.assertEqual(
+                (checkout / "reports" / "etf_radar" / "latest" / "index.html").read_text(),
+                "radar",
+            )
+            self.assertEqual(
+                (checkout / "reports" / "weekly" / "latest" / "index.html").read_text(),
+                "weekly",
+            )
             self.assertFalse((checkout / ".env").exists())
 
             second = run(

@@ -274,6 +274,7 @@ def build_combined_html(
         daily_href="index.html",
         weekly_href="../weekly/latest/index.html" if weekly_available else None,
         monthly_href=None,
+        radar_href="../etf_radar/latest/index.html",
     )
     published_at = published_at or datetime.now(ZoneInfo("Asia/Taipei"))
     published_text = published_at.astimezone(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M")

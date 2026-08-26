@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ETF雷達</title>
+<style>:root{--page:#faf6ef;--surface:#fffdfa;--line:rgba(37,31,25,.09);--line2:#ece2d4;--tint:#f1e8db;--tinth:#e8dcc9;--fill:#f6efe4;--hover:#f3ebde;--active:#3a2c22;--ink:#251f19;--ink2:#6d6055;--muted:#7c6e62;--faint:#d9cdbb;--inks:#4a3f35;--rule:#e4d9c8;--link:#2a78d6;--disabled:#c6b9a6}
+#w-momentum:checked ~ *,#w-value:checked ~ *,#w-overview:checked ~ *{--page:#fff4f3;--surface:#fffbfb;--line:rgba(52,32,30,.09);--line2:#f0e2e1;--tint:#fae7e4;--tinth:#f2dad7;--fill:#fbeeec;--hover:#fbeae8;--active:#5a3a36;--ink:#2d2322;--ink2:#6e605e;--muted:#7d6d6b;--faint:#ddcbc8;--inks:#4c3f3e;--rule:#e7d6d4;--link:#2a78d6;--disabled:#cab7b5}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--page);color:var(--ink);font-size:13px;
+ font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Segoe UI",sans-serif;
+ -webkit-font-smoothing:antialiased}
+.wrap{max-width:1500px;margin:0 auto;padding:18px 22px 48px}
+
+/* 分頁控制項：必須與面板、狀態區同層，否則 ~ 選擇器跨不過去 */
+.tabin{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+/* 底色圖層：radio 碰不到 body，改由這層承接。底色只由主題變數決定——
+   日報一色、週報一色，模型分頁之間不換色。 */
+.pagebg{position:fixed;inset:0;z-index:-1;background:var(--page);transition:background .2s}
+
+.head{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+ padding:0 24px 4px;overflow:hidden;
+ box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
+.accent{height:3px;margin:0 -24px 18px;
+ background:linear-gradient(90deg,#5c9b62 0 34%,#1e5fae 34% 67%,#eb6834 67% 100%)}
+.headrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.head h1{margin:0;font-size:25px;font-weight:800;letter-spacing:-.4px;color:var(--ink);line-height:1.2}
+.metaline{margin:7px 0 0;font-size:12.5px;color:var(--ink2);display:flex;align-items:center;gap:7px;
+ flex-wrap:wrap}
+.metaline em{font-style:normal;color:var(--faint)}
+.statusdot{width:7px;height:7px;border-radius:99px;background:var(--muted);display:inline-block}
+.statusdot.warn{background:#c07a1e}.statusdot.fail{background:#d03b3b}
+
+.period-nav{display:inline-flex;gap:2px;background:var(--tint);padding:3px;
+ border-radius:999px;flex:none}
+/* 尺寸與模型分頁一致，緊鄰其右；選中樣式刻意不同，區分主要動作與次要導覽 */
+.period-link{padding:8px 20px;border-radius:999px;font-size:14.5px;text-decoration:none;
+ color:var(--ink2);font-weight:600;white-space:nowrap;transition:background .15s,color .15s}
+a.period-link:hover{background:var(--tinth);color:var(--active)}
+.period-link.active{background:var(--surface);color:var(--ink);font-weight:700;
+ box-shadow:0 1px 2px rgba(11,11,11,.12)}
+.period-link.disabled{color:var(--disabled);cursor:not-allowed}
+
+.tabrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0 20px}
+.tabs{display:inline-flex;background:var(--tint);border-radius:999px;padding:3px;gap:2px}
+.tabs label{padding:8px 20px;font-size:14.5px;cursor:pointer;color:var(--ink2);font-weight:600;
+ border-radius:999px;user-select:none;transition:background .15s,color .15s;white-space:nowrap}
+.tabs label:hover{background:var(--tinth)}
+#t-momentum:checked ~ .head .tabs label[for=t-momentum],
+#t-value:checked    ~ .head .tabs label[for=t-value],
+#t-inter:checked    ~ .head .tabs label[for=t-inter]{background:var(--active);color:#fff;font-weight:700}
+
+.panel{padding:18px 0 0;display:none}
+#t-momentum:checked ~ #p-momentum,
+#t-value:checked    ~ #p-value,
+#t-inter:checked    ~ #p-inter{display:block}
+
+.legend{display:flex;gap:11px;align-items:center;font-size:11.5px;color:var(--muted);margin-bottom:8px;
+ flex-wrap:wrap}
+.legend span{white-space:nowrap}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;
+ vertical-align:-1px}
+/* 兩個模型的表格必須從相同高度開始。圖例文字長度不同時維持單行，窄螢幕可橫向滑動，
+   避免切換分頁時其中一邊換行而把表頭往下推。 */
+.model-panel>.note,.model-panel>.legend{white-space:nowrap;overflow-x:auto;scrollbar-width:none}
+.model-panel>.note::-webkit-scrollbar,.model-panel>.legend::-webkit-scrollbar{display:none}
+.model-panel>.legend{flex-wrap:nowrap}
+
+.listwrap{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+ overflow-x:auto;box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
+.lgrid-model{--cols:40px 50px 62px 90px 94px 106px 64px 78px 78px 78px 78px 78px;--minw:1082px}
+.lgrid-inter{--cols:66px 104px 112px 72px 78px 72px 78px;--minw:698px}
+.lrow.flatrow>.rowline,.lhead,.lrow>summary{display:grid;grid-template-columns:var(--cols);align-items:center;
+ gap:0 14px;padding:0 16px;min-width:var(--minw,1200px);width:100%}
+.lhead{background:var(--fill);border-bottom:1px solid var(--line2);color:var(--ink2);font-size:11.5px;
+ font-weight:700;padding-top:9px;padding-bottom:9px;position:sticky;top:0;z-index:2;
+ align-items:end;line-height:1.32;min-width:var(--minw,1200px)}
+.lhead span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 資料列首欄有展開三角的 13px 內距，表頭要跟上才不會整排看起來歪掉 */
+.lhead span:first-child{padding-left:13px}
+.lhead .k1:before,.lhead .k2:before,.lhead .k3:before{content:"";display:inline-block;
+ width:8px;height:8px;border-radius:2px;margin-right:5px}
+.lhead .k1:before{background:#5c9b62}
+.lhead .k2:before{background:#1e5fae}
+.lhead .k3:before{background:#eb6834}
+
+.lrow{border-bottom:1px solid var(--tint);min-width:var(--minw,1200px)}
+.lrow.flatrow>.rowline{padding-top:11px;padding-bottom:11px;font-size:13.5px}
+.lrow>summary{list-style:none;cursor:pointer;padding-top:11px;padding-bottom:11px;font-size:13.5px}
+.lrow>summary::-webkit-details-marker{display:none}
+.lrow>summary:hover{background:var(--hover)}
+/* 展開項目形成一個完整區塊：主列維持白色，明細用淡底，並在下一檔前留出呼吸。 */
+details.lrow[open]{border-bottom:6px solid var(--page);box-shadow:inset 3px 0 0 var(--muted)}
+.lrow[open]>summary{background:var(--surface)}
+/* 滑鼠點擊不殘留瀏覽器預設外框；鍵盤瀏覽仍保留清楚的可及性焦點。 */
+.lrow>summary:focus:not(:focus-visible){outline:none}
+.lrow>summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+.lrow .rk,.lrow .ind{color:var(--muted);font-variant-numeric:tabular-nums;position:relative;
+ padding-left:13px}
+.lrow .ind{color:var(--link)}
+.lrow .rk:before,.lrow .ind:before{content:"▸";position:absolute;left:0;color:var(--faint);
+ font-size:10px;transition:transform .12s;display:inline-block}
+.lrow[open] .rk:before,.lrow[open] .ind:before{transform:rotate(90deg);color:var(--active)}
+.lrow .nm{font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;
+ white-space:nowrap}
+.lrow .n,.lhead .n{text-align:right;font-variant-numeric:tabular-nums}
+.lrow .tot{font-weight:700;color:var(--ink);font-size:15.5px}
+.lrow .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link);font-size:13px}
+.lrow .sm{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .dim,.lhead .dim{color:var(--muted)}
+.barcell{display:flex;align-items:center}
+/* 欄位分四區：身分／分數／指標／外部訊號 */
+.lrow>summary>span:nth-child(6),.lrow.flatrow>.rowline>span:nth-child(6),
+.lhead>span:nth-child(6),
+.lrow>summary>span:nth-child(8),.lrow.flatrow>.rowline>span:nth-child(8),
+.lhead>span:nth-child(8){box-shadow:inset 1px 0 0 var(--line2);padding-left:12px}
+/* 前 5 名與其後的分隔。上下邊框已足夠，不再另加裝飾線——
+   那條線會把文字推到右側，與其他內容的左緣對不齊。 */
+.groupsep{padding:7px 16px 7px 29px;font-size:11px;color:var(--muted);letter-spacing:.4px;
+ min-width:var(--minw,1200px);width:100%;box-sizing:border-box;background:var(--fill);
+ border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+.bar{display:inline-flex;width:100%;height:8px;border-radius:99px;overflow:hidden;
+ background:var(--line2);vertical-align:middle}
+.bar i{display:block;height:100%}
+.up{color:#3f6b46;font-weight:600}.down{color:#b8452a;font-weight:600}
+.flat{color:var(--muted)}.new{color:#8a5aa8;font-weight:600}
+
+.sigchip{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11.5px;font-weight:600;
+ white-space:nowrap;font-style:normal}
+.sigchip.up{background:#e7f0e3;color:#3f6b46}
+.sigchip.mid{background:var(--tint);color:var(--ink2)}
+.sigchip.down{background:#fae5dd;color:#b8452a}
+
+.dwrap{margin:0;padding:3px 16px 7px;background:var(--fill)}
+.drow{display:grid;grid-template-columns:66px 1fr;gap:14px;padding:7px 0;align-items:baseline}
+.drow+.drow{border-top:1px dotted var(--rule)}
+.drow dt{font-size:11.5px;font-weight:700;color:var(--muted);white-space:nowrap;letter-spacing:.3px}
+.drow dd{margin:0;font-size:12.5px;line-height:1.8;color:var(--ink2)}
+.drow dd .sigchip{margin-right:8px;vertical-align:1px}
+
+.watchlist>summary{cursor:pointer;color:var(--active);font-size:12.5px;padding:11px 2px;font-weight:600}
+.note{color:var(--ink2);font-size:12.5px;line-height:1.75;margin:0 0 12px}
+.empty,.unavailable{color:var(--ink2);font-size:12.5px;line-height:1.75;margin:0 0 12px}
+
+/* 資料狀態：正常時安靜，異常時自動展開並轉為警示色 */
+.audit{margin-top:26px;padding-top:14px;border-top:1px solid var(--rule)}
+.audit h2{font-size:11.5px;color:var(--ink2);margin:0 0 8px;font-weight:700;letter-spacing:.5px}
+.model-status{display:none}
+#t-momentum:checked ~ .audit #status-momentum,
+#t-value:checked    ~ .audit #status-value,
+#t-inter:checked    ~ .audit #status-value,
+#t-inter:checked    ~ .audit #status-momentum{display:block}
+.statusbox{margin:0 0 2px;font-size:12.5px}
+.statusbox.ok{color:var(--ink2)}
+.statusbox.warn,.statusbox.fail{background:rgba(208,59,59,.07);border-left:4px solid #d03b3b;border-radius:8px;
+ color:#a8331f;margin-bottom:8px}
+.statusbox summary{list-style:none;cursor:pointer;padding:5px 2px;display:flex;align-items:center;
+ gap:10px;flex-wrap:wrap}
+.statusbox.warn summary,.statusbox.fail summary{padding:8px 13px}
+.statusbox summary::-webkit-details-marker{display:none}
+.statusbox summary:after{content:"▾";margin-left:auto;opacity:.5;font-size:11px}
+.statusbox[open] summary:after{content:"▴"}
+.statusbox .status-dot{width:7px;height:7px;border-radius:99px;flex:none;background:var(--muted)}
+.statusbox.warn .status-dot,.statusbox.fail .status-dot{background:#d03b3b;width:8px;height:8px}
+.statusbox .check-count{margin-left:14px;opacity:.8;white-space:nowrap}
+.statusbox.ok .status-summary strong{color:var(--inks);font-weight:700}
+.statusbox .checks{background:var(--fill);border:1px solid var(--tint);border-radius:8px;margin:2px 0 0;
+ overflow:hidden}
+.statusbox .status-stats{padding:9px 12px 8px;border-bottom:1px solid var(--tint);color:var(--ink2);
+ line-height:1.5}
+.statusbox .status-stats strong{color:var(--inks);font-variant-numeric:tabular-nums;font-weight:700;
+ font-size:13.5px}
+.statusbox table{width:100%;border-collapse:collapse}
+.statusbox thead th{text-align:left;padding:7px 12px;font-size:11px;color:var(--ink2);font-weight:600;
+ border-bottom:1px solid var(--line2);background:transparent}
+.statusbox td{padding:6px 12px;border-bottom:1px solid var(--tint)}
+.statusbox td:nth-child(2),.statusbox td:nth-child(3),
+.statusbox th:nth-child(2),.statusbox th:nth-child(3){text-align:right;
+ font-variant-numeric:tabular-nums}
+.statusbox .check-note{color:var(--muted)}
+.status{display:inline-block;padding:1px 8px;border-radius:5px;font-size:10.5px;font-weight:700}
+.status.ok{background:#e7f0e3;color:#3f6b46}
+.status.warn{background:#fbf0dc;color:#8a5a1a}
+.status.fail{background:#fae5dd;color:#a8331f}
+
+.foot{margin-top:10px;color:var(--ink2);font-size:11.5px;line-height:1.55}
+@media(max-width:760px){.wrap{padding:14px 12px 40px}.head{padding:0 16px 4px}
+ .accent{margin:0 -16px 14px}
+ .head h1{font-size:22px}.tabrow{gap:12px;margin:15px 0 17px}
+ .tabs label,.period-link{padding:8px 14px;font-size:13px}
+ .listwrap{-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain}
+ /* 桌面主表維持完整欄寬並可橫向滑動；展開說明則固定在手機可視寬度，
+    避免 iOS 把長文字依 1200px 表格寬度排版後裁掉。 */
+ .dwrap{position:sticky;left:0;width:calc(100vw - 26px);max-width:calc(100vw - 26px);
+  padding:3px 12px 7px}
+ .drow{grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:start;padding:7px 0}
+ .drow dt{font-size:10.5px;line-height:1.65}
+ .drow dd{font-size:12px;line-height:1.65;overflow-wrap:anywhere;word-break:break-word}
+ .drow dd .sigchip{margin-right:6px}
+ /* 檢核明細同樣可能比手機寬；保留可讀字級，以橫向捲動承接完整欄位。 */
+ .statusbox .checks{overflow-x:auto;-webkit-overflow-scrolling:touch}
+ .statusbox table{min-width:620px}}
+
+/* ── ETF雷達：沿用日報樣式表，只加欄位定義與狀態格 ── */
+.panel{display:block}
+.lgrid-etf{--cols:98px 50px 88px 56px 56px 56px 56px 56px 68px 72px 72px 60px;--minw:974px}
+/* 正式 CSS 用 nth-child(6)/(8) 畫分區線並加 padding-left:12px，那是為日報的
+   12 欄版面寫的。ETF 版第 6、8 欄剛好是 982A 與 991A，會被推歪 6px 並多一條線。 */
+.lhead.lgrid-etf>span,.lrow.lgrid-etf>summary>span{box-shadow:none;padding-left:0}
+.lhead.lgrid-etf>span:first-child{padding-left:13px}
+.etfh{text-align:center;letter-spacing:0;font-variant-numeric:tabular-nums}
+.etfc{text-align:center;font-variant-numeric:tabular-nums;font-size:12px;padding:2px 0;border-radius:3px}
+.etfc .mark{font-size:10px;font-style:normal;vertical-align:1px;margin-right:1px}
+.etfc.on{background:#e7f0e3;color:#3f6b46;font-weight:600}
+.etfc.up{background:rgba(235,104,52,.13);color:#b8452a;font-weight:700}
+.etfc.off{color:var(--faint)}
+.etfc.miss{background:#fae5dd;color:#a8331f;font-weight:700}
+.sigchip.conf{background:#e4ecf7;color:#2b5a94}
+.sigchip.start{background:rgba(235,104,52,.15);color:#b8452a}
+.sigcell{display:flex;align-items:center}
+.sigcell .sigchip{white-space:nowrap}
+.split{text-align:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--inks)}
+.split s{text-decoration:none;color:var(--faint);margin:0 3px}
+.lrow.hot>summary{background:rgba(235,104,52,.045)}
+.lrow.hot>summary:hover{background:rgba(235,104,52,.085)}
+.statusdot.warn{background:#d03b3b}
+
+/* 展開明細裡的逐 ETF 小表 */
+.subt{width:100%;border-collapse:collapse;font-size:12px;margin:2px 0 0}
+.subt th{font-size:10.5px;font-weight:600;color:var(--muted);letter-spacing:.4px;
+ text-align:right;padding:0 0 5px;border-bottom:1px solid var(--rule)}
+.subt th:first-child,.subt td:first-child{text-align:left}
+.subt th:last-child,.subt td:last-child{text-align:left;padding-left:14px}
+.subt td{padding:6px 0;border-bottom:1px solid var(--line);text-align:right;
+ font-variant-numeric:tabular-nums;color:var(--ink2)}
+.subt tr:last-child td{border-bottom:none}
+.subt td.f{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
+.subt td.pos{color:#3f6b46;font-weight:700}
+.subt td.neu{color:var(--muted)}
+.subt td.hot{color:#b8452a;font-weight:700}
+
+/* 已排除：常駐卡片，不摺疊 */
+.exbox{margin-top:22px;border:1px solid var(--line2);border-left:3px solid var(--faint);
+ border-radius:6px;background:var(--surface);overflow:hidden}
+.exhead{display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+ padding:12px 16px;border-bottom:1px solid var(--line2)}
+.exhead h3{margin:0;font-size:13px;color:var(--active);font-weight:600;letter-spacing:.02em}
+.exhead span{font-size:11.5px;color:#b8452a;font-weight:600;white-space:nowrap}
+.exwrap{padding:2px 16px 8px;overflow-x:auto}
+.exrow{display:grid;grid-template-columns:64px 96px minmax(190px,1fr) 128px 84px;gap:16px;
+ padding:9px 0;border-bottom:1px solid var(--line);align-items:baseline;min-width:600px}
+.exrow:last-child{border-bottom:none}
+.exrow .why{color:var(--ink2);font-size:12px}
+.exrow .dn{text-align:right;font-variant-numeric:tabular-nums;color:#b8452a;font-size:12px}
+.exrow .tag{color:var(--muted);font-size:11.5px}
+.mockbar{background:#f6efe4;border:1px solid var(--rule);color:var(--ink2);padding:9px 14px;
+ border-radius:5px;font-size:11.5px;margin:18px 0 0}
+</style></head><body><div class="wrap">
+<header class="head">
+  <div class="accent"></div>
+  <div class="headrow"><h1>ETF 雷達</h1></div>
+  <p class="metaline">
+    <span class="statusdot warn"></span>揭露 4/5
+    <em>·</em> 資料日 2026-08-25
+    <em>·</em> 00992A 未更新
+    <em>·</em> 跨投信共振 1 檔
+    <em>·</em> 加碼中 3 檔
+    <em>·</em> 低部位觀察 34 檔
+    <em>·</em> 資料發佈 2026-08-26 09:08
+  </p>
+  <div class="tabrow">
+    <nav class="period-nav" aria-label="報表期間"><a class="period-link active" href="index.html" aria-current="page">ETF雷達</a><a class="period-link" href="../../latest/index.html">日報</a><a class="period-link" href="../../weekly/latest/index.html">週報</a><span class="period-link disabled" title="資料尚未足夠">月報</span></nav>
+  </div>
+</header>
+<section class="panel">
+  <p class="note">主動式 ETF 持有低部位、且非賣出殘留的個股，由強至弱排序：<b>跨投信共振</b>（兩家以上投信同時轉加碼）→ <b>確認布局</b>（承接低部位、連續加碼）→ <b>開始加碼</b>（當日轉折）→ <b>低部位觀察</b>。「ETF/投信」只計入對當前訊號有貢獻者，同一家投信旗下多檔只算一家。點列展開查看所有持有與資料不足的 ETF。本頁不使用、也不影響雙模型的 100 分評分與硬門檻。</p>
+  <p class="legend"><span>▲ 加碼轉向</span><span>● 低部位</span><span>數字＝目前持有張數</span><span>— 未持有</span><span>缺＝資料不足</span><span>張數只供閱讀；訊號以展開明細的個股權重計算</span><span>統一 981A・403A｜復華 991A｜群益 982A・992A</span></p>
+  <div class="listwrap">
+    <div class="lhead lgrid-etf">
+      <span>訊號</span><span>代碼</span><span>公司</span>
+      <span class="etfh">981A</span>
+      <span class="etfh">403A</span>
+      <span class="etfh">991A</span>
+      <span class="etfh">982A</span>
+      <span class="etfh">992A</span>
+      <span class="etfh">ETF/投信</span><span class="n">低部位起點</span><span class="n">最近轉向</span><span class="n">收盤</span>
+    </div>
+
+    <details class="lrow lgrid-etf hot">
+      <summary><span class="sigcell"><span class="sigchip up">跨投信共振</span></span><span class="mono">4958</span><span class="nm">臻鼎-KY</span><span class="etfc up"><i class="mark">▲</i>480</span><span class="etfc on"><i class="mark">●</i>1</span><span class="etfc up"><i class="mark">▲</i>2</span><span class="etfc on"><i class="mark">●</i>1</span><span class="etfc miss">缺</span><span class="split">2<s>/</s>2</span><span class="n">07-21</span><span class="n">08-25</span><span class="n">108.5</span></summary>
+      <dl class="dwrap">
+        <div class="drow"><dt>判定</dt><dd>00981A 今日確認布局，00991A 於 08-23 開始加碼，3 日內分屬統一與復華兩家投信，因此形成跨投信共振。00403A、00982A 只是維持低部位，<b>不計入 ETF／投信</b>；00992A 揭露未更新，也不參與判定。</dd></div>
+        <div class="drow"><dt>逐檔明細</dt><dd><table class="subt"><thead><tr><th>ETF</th><th>投信</th><th>雷達權重（√AUM）</th><th>個股權重</th><th>5日標準化部位</th><th>目前狀態</th></tr></thead><tbody>
+          <tr><td class="f">00981A</td><td>統一</td><td>32.0%</td><td>0.18%</td><td class="hot">+142%</td><td>確認布局 · 連續 2 日</td></tr>
+          <tr><td class="f">00403A</td><td>統一</td><td>24.7%</td><td>0.04%</td><td class="neu">+3%</td><td>低部位觀察</td></tr>
+          <tr><td class="f">00991A</td><td>復華</td><td>17.5%</td><td>0.12%</td><td class="pos">+88%</td><td>開始加碼 · 08-23</td></tr>
+          <tr><td class="f">00982A</td><td>群益</td><td>13.4%</td><td>0.09%</td><td class="neu">+4%</td><td>低部位觀察</td></tr>
+          <tr><td class="f">00992A</td><td>群益</td><td>12.4%</td><td>—</td><td class="neu">資料不足</td><td>揭露未更新 · 不參與判定</td></tr>
+        </tbody></table></dd></div>
+        <div class="drow"><dt>交叉參照</dt><dd>雙模型：營運動能第 38 名，防禦價值未入榜——本頁不影響其排名。市值 1,043 億，20 日均額 7.2 億。</dd></div>
+      </dl>
+    </details>
+
+    <details class="lrow lgrid-etf hot">
+      <summary><span class="sigcell"><span class="sigchip conf">確認布局</span></span><span class="mono">2327</span><span class="nm">國巨</span><span class="etfc up"><i class="mark">▲</i>310</span><span class="etfc off">—</span><span class="etfc on"><i class="mark">●</i>1</span><span class="etfc on"><i class="mark">●</i>2</span><span class="etfc miss">缺</span><span class="split">1<s>/</s>1</span><span class="n">07-24</span><span class="n">08-25</span><span class="n">612.0</span></summary>
+      <dl class="dwrap">
+        <div class="drow"><dt>判定</dt><dd>三檔持有、分屬三家投信，但只有 00981A 承接昨日的「開始加碼」並再次提高個股權重，因此訊號廣度為 1 檔／1 投信。00991A、00982A 只是低部位觀察，不放大確認布局的證據力。</dd></div>
+        <div class="drow"><dt>逐檔明細</dt><dd><table class="subt"><thead><tr><th>ETF</th><th>投信</th><th>雷達權重（√AUM）</th><th>個股權重</th><th>5日標準化部位</th><th>目前狀態</th></tr></thead><tbody>
+          <tr><td class="f">00981A</td><td>統一</td><td>32.0%</td><td>0.41%</td><td class="hot">+214%</td><td>確認布局 · 連續 2 日</td></tr>
+          <tr><td class="f">00991A</td><td>復華</td><td>17.5%</td><td>0.05%</td><td class="neu">+12%</td><td>低部位觀察</td></tr>
+          <tr><td class="f">00982A</td><td>群益</td><td>13.4%</td><td>0.07%</td><td class="neu">+5%</td><td>低部位觀察</td></tr>
+          <tr><td class="f">00992A</td><td>群益</td><td>12.4%</td><td>—</td><td class="neu">資料不足</td><td>揭露未更新 · 不參與判定</td></tr>
+        </tbody></table></dd></div>
+        <div class="drow"><dt>交叉參照</dt><dd>雙模型：兩模型皆未入榜。市值 2,614 億，20 日均額 46.2 億。</dd></div>
+      </dl>
+    </details>
+
+    <details class="lrow lgrid-etf">
+      <summary><span class="sigcell"><span class="sigchip start">開始加碼</span></span><span class="mono">3017</span><span class="nm">奇鋐</span><span class="etfc off">—</span><span class="etfc up"><i class="mark">▲</i>96</span><span class="etfc off">—</span><span class="etfc on"><i class="mark">●</i>1</span><span class="etfc miss">缺</span><span class="split">1<s>/</s>1</span><span class="n">08-01</span><span class="n">08-25</span><span class="n">886.0</span></summary>
+      <dl class="dwrap">
+        <div class="drow"><dt>判定</dt><dd>00403A 的個股權重由 0.03% 增至 0.06%，為當日開始加碼；00982A 維持低部位但沒有轉向。00992A 揭露未更新，生命週期凍結，不使用前一日部位補值。</dd></div>
+        <div class="drow"><dt>逐檔明細</dt><dd><table class="subt"><thead><tr><th>ETF</th><th>投信</th><th>雷達權重（√AUM）</th><th>個股權重</th><th>5日標準化部位</th><th>目前狀態</th></tr></thead><tbody>
+          <tr><td class="f">00403A</td><td>統一</td><td>24.7%</td><td>0.06%</td><td class="hot">+61%</td><td>開始加碼 · 首日</td></tr>
+          <tr><td class="f">00982A</td><td>群益</td><td>13.4%</td><td>0.03%</td><td class="neu">+4%</td><td>低部位觀察</td></tr>
+          <tr><td class="f">00992A</td><td>群益</td><td>12.4%</td><td>—</td><td class="neu">資料不足</td><td>揭露未更新 · 不參與判定</td></tr>
+        </tbody></table></dd></div>
+        <div class="drow"><dt>交叉參照</dt><dd>雙模型：營運動能第 7 名——本頁不影響其排名。市值 3,890 億，20 日均額 28.4 億。</dd></div>
+      </dl>
+    </details>
+
+    <details class="lrow lgrid-etf">
+      <summary><span class="sigcell"><span class="sigchip mid">低部位觀察</span></span><span class="mono">2385</span><span class="nm">群光</span><span class="etfc on"><i class="mark">●</i>1</span><span class="etfc on"><i class="mark">●</i>1</span><span class="etfc on"><i class="mark">●</i>3</span><span class="etfc off">—</span><span class="etfc miss">缺</span><span class="split">3<s>/</s>2</span><span class="n">07-28</span><span class="n">—</span><span class="n">142.0</span></summary>
+      <dl class="dwrap">
+        <div class="drow"><dt>判定</dt><dd>三檔通過低部位過濾，但 00981A 與 00403A 同屬統一，因此廣度為 3 檔／2 投信。三檔權重均未出現加碼轉向；00992A 資料不足不計入。</dd></div>
+        <div class="drow"><dt>逐檔明細</dt><dd><table class="subt"><thead><tr><th>ETF</th><th>投信</th><th>雷達權重（√AUM）</th><th>個股權重</th><th>5日標準化部位</th><th>目前狀態</th></tr></thead><tbody>
+          <tr><td class="f">00981A</td><td>統一</td><td>32.0%</td><td>0.02%</td><td class="neu">+1%</td><td>低部位觀察</td></tr>
+          <tr><td class="f">00403A</td><td>統一</td><td>24.7%</td><td>0.03%</td><td class="neu">0%</td><td>低部位觀察</td></tr>
+          <tr><td class="f">00991A</td><td>復華</td><td>17.5%</td><td>0.05%</td><td class="neu">+2%</td><td>低部位觀察</td></tr>
+          <tr><td class="f">00992A</td><td>群益</td><td>12.4%</td><td>—</td><td class="neu">資料不足</td><td>揭露未更新 · 不參與判定</td></tr>
+        </tbody></table></dd></div>
+        <div class="drow"><dt>交叉參照</dt><dd>雙模型：兩模型皆未入榜。市值 1,186 億，20 日均額 5.4 億。</dd></div>
+      </dl>
+    </details>
+
+    <details class="lrow lgrid-etf">
+      <summary><span class="sigcell"><span class="sigchip mid">低部位觀察</span></span><span class="mono">2455</span><span class="nm">全新</span><span class="etfc on"><i class="mark">●</i>1</span><span class="etfc off">—</span><span class="etfc off">—</span><span class="etfc off">—</span><span class="etfc miss">缺</span><span class="split">1<s>/</s>1</span><span class="n">08-24</span><span class="n">—</span><span class="n">98.7</span></summary>
+      <dl class="dwrap">
+        <div class="drow"><dt>判定</dt><dd>00981A 由未持有轉為 0.01% 的新建低部位，目前只有 2 個交易日資料。<code>pos(t-5)</code> 不存在，因此不計算 5 日變化，也不直接判定為開始加碼。</dd></div>
+        <div class="drow"><dt>逐檔明細</dt><dd><table class="subt"><thead><tr><th>ETF</th><th>投信</th><th>雷達權重（√AUM）</th><th>個股權重</th><th>5日標準化部位</th><th>目前狀態</th></tr></thead><tbody>
+          <tr><td class="f">00981A</td><td>統一</td><td>32.0%</td><td>0.01%</td><td class="neu">新建</td><td>新建低部位 · 第 2 日</td></tr>
+          <tr><td class="f">00992A</td><td>群益</td><td>12.4%</td><td>—</td><td class="neu">資料不足</td><td>揭露未更新 · 不參與判定</td></tr>
+        </tbody></table></dd></div>
+        <div class="drow"><dt>交叉參照</dt><dd>雙模型：兩模型皆未入榜。市值 402 億，20 日均額 2.8 億。</dd></div>
+      </dl>
+    </details>
+  </div>
+
+  <div class="exbox">
+    <div class="exhead"><h3>已排除與資料不足</h3><span>5 筆 · 不進入雷達排序</span></div>
+    <div class="exwrap"><div class="exrow"><span class="mono">2317</span><span class="nm">鴻海</span><span class="why">最近 5 日有 4 日減碼<span class="dim sm">　00982A</span></span><span class="dn">5 日標準化部位 −46%</span><span class="tag">出清尾倉</span></div><div class="exrow"><span class="mono">2603</span><span class="nm">長榮</span><span class="why">持股股數與權重同步下降<span class="dim sm">　00981A</span></span><span class="dn">5 日標準化部位 −38%</span><span class="tag">出清尾倉</span></div><div class="exrow"><span class="mono">2454</span><span class="nm">聯發科</span><span class="why">847 股，非整張數<span class="dim sm">　00991A</span></span><span class="dn">5 日標準化部位 —</span><span class="tag">配股殘留</span></div><div class="exrow"><span class="mono">2882</span><span class="nm">國泰金</span><span class="why">佔基金 0.31%，高於門檻 0.15%<span class="dim sm">　00403A</span></span><span class="dn">5 日標準化部位 —</span><span class="tag">非低部位</span></div><div class="exrow"><span class="mono">3231</span><span class="nm">緯創</span><span class="why">該 ETF 揭露中斷 3 日<span class="dim sm">　00992A</span></span><span class="dn">5 日標準化部位 —</span><span class="tag">資料不足</span></div></div>
+  </div>
+
+  <div class="audit">
+    <h2>規則與定位</h2>
+    <p class="foot"><b>低部位</b>　佔基金淨值 ≤ 0.15%、為 1,000 股整數倍，且未觸發連續減碼排除。<b>標準化部位</b>以個股「權重」而非「股數」計算——ETF 申購贖回會讓所有持股的股數齊漲齊跌，用股數會把申贖誤判成經理人的動作。</p>
+    <p class="foot"><b>投信去重</b>　統一旗下 00981A／00403A、群益旗下 00982A／00992A 各併計為一家。同一家投信的兩檔 ETF 常共用研究團隊，兩檔同時持有的證據力低於兩家不同投信。</p>
+    <p class="foot"><b>雷達權重 v2026-08</b>　00981A 32.0%／00403A 24.7%／00991A 17.5%／00982A 13.4%／00992A 12.4%。依近 20 個交易日 AUM 中位數平方根正規化，只用於同級排序，不是分數。</p>
+    <p class="foot"><b>時效</b>　PCF 為 T 日盤後揭露，本頁呈現的是前一交易日的部位，最快只能在 T+1 跟進 T 日的動作。</p>
+    <p class="foot"><b>證據等級</b>　「低部位＝經理人試單」為市場觀察，非可驗證事實。小部位另有除權配股殘留、可轉債轉換、實物申購贖回畸零部位、成分股調整過渡等成因。主動式 ETF 上市時間過短，此訊號無法回測。本頁為觀察工具，不是選股模型，不寫入排名歷史。量化排序不是買進建議。</p>
+  </div>
+  <p class="mockbar">版面草案：本頁所有數字皆為示意用假資料，僅供確認欄位與資訊密度。</p>
+</section>
+</div></body></html>

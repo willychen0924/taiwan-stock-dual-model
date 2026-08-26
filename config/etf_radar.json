@@ -1,0 +1,16 @@
+{
+  "version": "0.1.0",
+  "low_position_max_weight": 0.0015,
+  "require_round_lot": true,
+  "exclude_decline_days": {
+    "window": 4,
+    "min_declines": 3
+  },
+  "exclude_drop_5d": 0.30,
+  "boost_min_increase": 0.20,
+  "confirm_consecutive_days": 2,
+  "resonance_window_days": 3,
+  "resonance_min_issuers": 2,
+  "warmup_trading_days": 6,
+  "low_observation_limit": 20
+}

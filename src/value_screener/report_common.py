@@ -276,9 +276,11 @@ def period_navigation(
     daily_href: str,
     weekly_href: str | None,
     monthly_href: str | None,
+    radar_href: str | None = None,
 ) -> str:
     items = []
     for key, label, href in [
+        ("radar", "ETF雷達", radar_href),
         ("daily", "日報", daily_href),
         ("weekly", "週報", weekly_href),
         ("monthly", "月報", monthly_href),
@@ -295,7 +297,7 @@ def period_navigation(
                 f'<a class="{" ".join(classes)}" href="{html.escape(href, quote=True)}"'
                 f'{current_attribute}>{label}</a>'
             )
-    return f'<nav class="period-nav" aria-label="報表期間">{"".join(items)}</nav>'
+    return f'<nav class="period-nav" aria-label="報表導覽">{"".join(items)}</nav>'
 
 
 def monitor_report_css() -> str:

@@ -15,6 +15,8 @@
 
 專案另提供獨立的營運動能模型：營運動能 60 分、動能品質 25 分、估值與流動性 15 分；完整設定位於 `config/momentum_screening.json`。兩個模型共用市場與財報資料，但門檻、分數及排名互不混用。
 
+另有獨立的「ETF 雷達」，每日追蹤 00981A、00403A、00991A、00982A、00992A 的完整投資組合，觀察低部位轉向與跨投信共振。ETF 雷達只以個股在基金中的權重判定，不使用股數判定加碼，也不進入雙模型的 100 分評分、硬門檻或排名歷史。完整規格位於 `docs/etf_radar_spec.md`。
+
 ## 執行
 
 先在專案根目錄建立 `.env`：
@@ -50,7 +52,7 @@ zsh scripts/run_all.sh
 
 日報入口為 `reports/latest/index.html`；週報入口為 `reports/weekly/latest/index.html`。週報只使用排名歷史中的有效觀測，並自動切開模型版本。月報需先通過 `scripts/check_monthly_readiness.py` 的資料量與同版本門檻，目前不會以不足資料產生。
 
-完整流程完成後會把最新日報與週報 HTML 推送到遠端 `gh-pages` 分支，再由 GitHub Pages 發布。只發布自包含 HTML，不上傳 `.env`、FinMind 原始資料、JSON、CSV、Excel、QA 或技術籌碼快取。若只想更新本機，可執行：
+完整流程完成後會把最新 ETF 雷達與雙模型日報 HTML 推送到遠端 `gh-pages` 分支，再由 GitHub Pages 發布；若已有週報也會一併更新。只發布自包含 HTML，不上傳 `.env`、投信或 FinMind 原始資料、JSON、CSV、Excel、QA 或技術籌碼快取。若只想更新本機，可執行：
 
 ```bash
 PUBLISH_GITHUB_PAGES=0 zsh scripts/run_all.sh
