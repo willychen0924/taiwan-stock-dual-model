@@ -83,6 +83,14 @@ class ETFRadarReportTests(unittest.TestCase):
         header = page[page.index('class="lhead lgrid-etf"'):page.index('</div>', page.index('class="lhead lgrid-etf"'))]
         self.assertNotIn("32.0%", header)
 
+    def test_detail_table_shows_lots_before_stock_weight(self) -> None:
+        page = self._page()
+        self.assertIn(
+            "<th>雷達權重（√AUM）</th><th>持有張數</th><th>個股權重</th>",
+            page,
+        )
+        self.assertIn("<td>32.0%</td><td>1</td><td>0.13%</td>", page)
+
     def test_cold_start_waiting_candidate_is_visible_with_low_marker(self) -> None:
         page = self._cold_page()
         self.assertIn('class="sigchip wait">待觀察</span>', page)

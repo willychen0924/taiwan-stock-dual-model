@@ -46,6 +46,13 @@ def _number(value: Any, digits: int = 1) -> str:
     return "—" if value is None else f"{float(value):,.{digits}f}"
 
 
+def _lots(value: Any) -> str:
+    if value is None:
+        return "—"
+    rendered = f"{float(value) / 1000:,.3f}"
+    return rendered.rstrip("0").rstrip(".")
+
+
 def _money_yi(value: Any) -> str:
     return "—" if value is None else f"{float(value) / 100_000_000:,.1f} 億"
 
@@ -105,6 +112,7 @@ def _detail(row: dict[str, Any]) -> str:
             f'<td class="f">{esc(item["etf_code"])}</td>'
             f'<td>{esc(item["issuer"])}</td>'
             f'<td>{_percent(item.get("radar_weight"), 1)}</td>'
+            f'<td>{_lots(item.get("shares"))}</td>'
             f'<td>{esc("低於揭露精度") if item.get("below_precision") else _percent(item.get("stock_weight"), 2)}</td>'
             f'<td class="{tone}">{esc(position_change)}</td>'
             f'<td>{esc(item["state_label"])}</td>'
@@ -124,7 +132,7 @@ def _detail(row: dict[str, Any]) -> str:
         '<dl class="dwrap">'
         f'<div class="drow"><dt>判定</dt><dd>{_judgement(row)}</dd></div>'
         '<div class="drow"><dt>逐檔明細</dt><dd><table class="subt"><thead><tr>'
-        '<th>ETF</th><th>投信</th><th>雷達權重（√AUM）</th><th>個股權重</th>'
+        '<th>ETF</th><th>投信</th><th>雷達權重（√AUM）</th><th>持有張數</th><th>個股權重</th>'
         '<th>5日標準化部位</th><th>目前狀態</th></tr></thead><tbody>'
         f'{"".join(detail_rows)}</tbody></table></dd></div>'
         f'<div class="drow"><dt>交叉參照</dt><dd>{reference}</dd></div>'
