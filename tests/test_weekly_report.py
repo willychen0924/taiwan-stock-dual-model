@@ -138,6 +138,9 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn('▼ 下降最多', page)
         self.assertNotIn("期初至期末淨進出", page)
         self.assertIn("不是買進建議", page)
+        self.assertLess(page.index(">ETF雷達</"), page.index(">日報</"))
+        self.assertIn('href="../../etf_radar/latest/index.html"', page)
+        self.assertIn('aria-current="page">週報</a>', page)
         self.assertIn('href="../../latest/index.html"', page)
 
     def test_version_warning_lists_only_unselected_segments_as_other(self) -> None:
