@@ -70,6 +70,39 @@ def _build(series: dict[str, list[float]], *, missing_last: set[str] | None = No
 
 
 class ETFRadarSignalTests(unittest.TestCase):
+    def test_cold_start_shows_low_position_as_waiting_without_event(self) -> None:
+        days = _days({"00981A": [0.001] * 7})[:1]
+        result = build_radar_result(
+            days,
+            CONFIG,
+            weights=WEIGHTS,
+            weight_version="test",
+            aum_medians={code: 1.0 for code in WEIGHTS},
+            provisional_weights=True,
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["signal"], "待觀察")
+        self.assertEqual(row["contributors"], ["00981A"])
+        self.assertEqual(row["cells"]["00981A"]["kind"], "low")
+        self.assertEqual(row["last_turn"], "")
+
+    def test_zero_rounded_weight_with_shares_is_not_treated_as_unheld(self) -> None:
+        days = _days({"00981A": [0.001] * 7})[:1]
+        position = days[0]["snapshots"]["00981A"]["positions"][0]
+        position["weight"] = 0.0
+        result = build_radar_result(
+            days,
+            CONFIG,
+            weights=WEIGHTS,
+            weight_version="test",
+            aum_medians={code: 1.0 for code in WEIGHTS},
+            provisional_weights=True,
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["signal"], "待觀察")
+        detail = next(item for item in row["details"] if item["etf_code"] == "00981A")
+        self.assertTrue(detail["below_precision"])
+
     def test_first_signal_can_only_appear_on_day_seven(self) -> None:
         result = _build({"00981A": [0.001] * 6 + [0.0013]})
         row = result["rows"][0]

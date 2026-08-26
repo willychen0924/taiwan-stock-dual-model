@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "low_position_max_weight": 0.0015,
   "require_round_lot": true,
   "exclude_decline_days": {

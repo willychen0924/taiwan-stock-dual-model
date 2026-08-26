@@ -25,6 +25,7 @@ SIGNAL_ORDER = {
     "確認布局": 1,
     "開始加碼": 2,
     "低部位觀察": 3,
+    "待觀察": 4,
 }
 
 PAIR_LABELS = {
@@ -33,6 +34,7 @@ PAIR_LABELS = {
     "decline_tail": "減碼尾倉",
     "residual": "配股殘留",
     "non_low": "非低部位",
+    "cold_low": "待觀察（歷史不足）",
     "low": "低部位觀察",
     "stopped": "已止跌",
     "start": "開始加碼",
@@ -277,6 +279,7 @@ def _pair_series(
 
         weight = float(position.get("weight") or 0.0) if position else 0.0
         shares = int(position.get("shares") or 0) if position else 0
+        below_precision = bool(position and shares > 0 and weight == 0)
         comparable_weights.append(weight)
         consecutive += 1
         pos_5d = None
@@ -285,14 +288,18 @@ def _pair_series(
         warm = consecutive > warmup
         tail = weight > 0 and _tail_state(comparable_weights, config)
         residual = bool(
-            weight > 0
+            shares > 0
             and config.get("require_round_lot", True)
             and shares % 1000 != 0
         )
-        is_low = 0 < weight <= low_limit and not residual and not tail
+        is_low = (
+            (0 < weight <= low_limit or below_precision)
+            and not residual
+            and not tail
+        )
         event = None
 
-        if weight == 0:
+        if shares == 0:
             internal_state = "unheld"
             active_turn = False
             armed = False
@@ -350,7 +357,15 @@ def _pair_series(
             else:
                 internal_state = "non_low"
 
-        state = internal_state if warm else "missing"
+        if warm:
+            state = internal_state
+        elif internal_state in {"low", "stopped"}:
+            # A single disclosed snapshot can identify a small position, but
+            # cannot yet rule out a multi-day selling tail.  Show it without
+            # allowing any start/confirm/resonance event during warm-up.
+            state = "cold_low"
+        else:
+            state = internal_state
         points.append(
             {
                 "date": day["data_date"],
@@ -359,6 +374,7 @@ def _pair_series(
                 "weight": weight,
                 "shares": shares,
                 "pos_5d": pos_5d if warm else None,
+                "below_precision": below_precision,
             }
         )
         previous_qualifying_low = is_low and internal_state in {"low", "stopped"}
@@ -381,7 +397,7 @@ def _stock_universe(days: list[dict[str, Any]]) -> tuple[set[str], dict[str, str
 
 
 def _low_start(points: list[dict[str, Any]]) -> str:
-    allowed = {"low", "stopped", "start", "confirm", "post_turn"}
+    allowed = {"cold_low", "low", "stopped", "start", "confirm", "post_turn"}
     dates = []
     for point in reversed(points):
         if point["state"] not in allowed:
@@ -397,10 +413,15 @@ def _fmt_cell(
         return {"kind": "missing", "text": "缺", "title": "資料不足"}
     shares = int(point.get("shares") or 0)
     lots = shares // 1000
-    if contributor and point["state"] in {"start", "confirm", "post_turn", "low", "stopped"}:
+    if contributor and point["state"] in {"start", "confirm", "post_turn"}:
         return {"kind": "up", "text": str(lots), "title": PAIR_LABELS[point["state"]]}
-    if point["state"] in {"low", "stopped"}:
-        return {"kind": "low", "text": str(lots), "title": PAIR_LABELS[point["state"]]}
+    if point["state"] in {"cold_low", "low", "stopped"}:
+        title = (
+            "待觀察：官網權重低於揭露精度"
+            if point.get("below_precision")
+            else PAIR_LABELS[point["state"]]
+        )
+        return {"kind": "low", "text": str(lots), "title": title}
     title = "未持有" if point["state"] == "unheld" else f"未納入訊號：{PAIR_LABELS[point['state']]}"
     return {"kind": "none", "text": "—", "title": title}
 
@@ -473,6 +494,7 @@ def build_radar_result(
         confirm_codes = [code for code, point in current.items() if point.get("event") == "confirm"]
         start_codes = [code for code, point in current.items() if point.get("event") == "start"]
         low_codes = [code for code, point in current.items() if point["state"] in {"low", "stopped"}]
+        cold_codes = [code for code, point in current.items() if point["state"] == "cold_low"]
 
         if len(event_issuers) >= int(config["resonance_min_issuers"]):
             signal = "跨投信共振"
@@ -486,6 +508,9 @@ def build_radar_result(
         elif low_codes:
             signal = "低部位觀察"
             contributors = low_codes
+        elif cold_codes:
+            signal = "待觀察"
+            contributors = cold_codes
         else:
             signal = ""
             contributors = []
@@ -503,6 +528,7 @@ def build_radar_result(
                         "stock_weight": point.get("weight"),
                         "pos_5d": point.get("pos_5d"),
                         "shares": point.get("shares"),
+                        "below_precision": point.get("below_precision", False),
                         "state": point["state"],
                         "state_label": PAIR_LABELS[point["state"]],
                         "contributor": code in contributors,

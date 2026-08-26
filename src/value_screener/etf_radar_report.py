@@ -16,11 +16,18 @@ _SIGNAL_CLASS = {
     "確認布局": "conf",
     "開始加碼": "start",
     "低部位觀察": "mid",
+    "待觀察": "wait",
 }
 
 
 def _percent(value: Any, digits: int = 2) -> str:
-    return "—" if value is None else f"{float(value) * 100:.{digits}f}%"
+    if value is None:
+        return "—"
+    scaled = float(value) * 100
+    rendered = f"{scaled:.{digits}f}"
+    if scaled > 0 and float(rendered) == 0:
+        return f"<{10 ** -digits:.{digits}f}%"
+    return f"{rendered}%"
 
 
 def _change(value: Any) -> str:
@@ -65,6 +72,11 @@ def _judgement(row: dict[str, Any]) -> str:
         return f'{esc(contributors)} 承接前一交易日的開始加碼，個股權重再次提高，列為確認布局。'
     if row["signal"] == "開始加碼":
         return f'{esc(contributors)} 原為低部位，當日個股權重提高至少 20%，列為開始加碼。'
+    if row["signal"] == "待觀察":
+        return (
+            f'{esc(contributors)} 當日符合低部位與整張數，但目前只有單日或不足歷史，'
+            "尚無法完成連續減碼尾倉檢查；不屬於加碼或共振訊號。"
+        )
     return (
         f'{esc(contributors)} 通過低部位、整張數與非連續減碼檢查；目前尚未出現加碼轉向。'
         "同一家投信旗下多檔仍只算一家。"
@@ -84,7 +96,7 @@ def _detail(row: dict[str, Any]) -> str:
             f'<td class="f">{esc(item["etf_code"])}</td>'
             f'<td>{esc(item["issuer"])}</td>'
             f'<td>{_percent(item.get("radar_weight"), 1)}</td>'
-            f'<td>{_percent(item.get("stock_weight"), 2)}</td>'
+            f'<td>{esc("低於揭露精度") if item.get("below_precision") else _percent(item.get("stock_weight"), 2)}</td>'
             f'<td class="{tone}">{esc(position_change)}</td>'
             f'<td>{esc(item["state_label"])}</td>'
             "</tr>"
@@ -183,6 +195,7 @@ def _extra_css() -> str:
 .etfc.on{background:#e7f0e3;color:#3f6b46;font-weight:600}.etfc.up{background:rgba(235,104,52,.13);color:#b8452a;font-weight:700}
 .etfc.off{color:var(--faint)}.etfc.miss{background:#fae5dd;color:#a8331f;font-weight:700}
 .sigchip.conf{background:#e4ecf7;color:#2b5a94}.sigchip.start{background:rgba(235,104,52,.15);color:#b8452a}
+.sigchip.wait{background:#efe9dc;color:#75664f}
 .sigcell{display:flex;align-items:center}.sigcell .sigchip{white-space:nowrap}.split{text-align:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--inks)}
 .split s{text-decoration:none;color:var(--faint);margin:0 3px}.lrow.hot>summary{background:rgba(235,104,52,.045)}
 .lrow.hot>summary:hover{background:rgba(235,104,52,.085)}
@@ -218,8 +231,9 @@ def build_etf_radar_html(
     for row in result["rows"]:
         counts[row["signal"]] += 1
     codes = list(meta["etf_order"])
-    active_rows = [row for row in result["rows"] if row["signal"] != "低部位觀察"]
-    low_rows = [row for row in result["rows"] if row["signal"] == "低部位觀察"]
+    watch_signals = {"低部位觀察", "待觀察"}
+    active_rows = [row for row in result["rows"] if row["signal"] not in watch_signals]
+    low_rows = [row for row in result["rows"] if row["signal"] in watch_signals]
     low_limit = 20
     primary_rows = active_rows + low_rows[:low_limit]
     extra_low = low_rows[low_limit:]
@@ -228,7 +242,7 @@ def build_etf_radar_html(
         table += '<p class="empty">目前沒有可排序的訊號；資料仍會每日累積，缺漏不以前一日補值。</p>'
     if extra_low:
         table += (
-            f'<details class="watchlist"><summary>展開其餘低部位觀察（{len(extra_low)} 檔）</summary>'
+            f'<details class="watchlist"><summary>展開其餘觀察名單（{len(extra_low)} 檔）</summary>'
             f'{_listing(extra_low, codes)}</details>'
         )
     missing_text = f'<em>·</em> {esc("、".join(missing_codes))} 缺失' if missing_codes else ""
@@ -259,12 +273,14 @@ def build_etf_radar_html(
 <em>·</em> 跨投信共振 {counts['跨投信共振']} 檔
 <em>·</em> 加碼中 {counts['確認布局'] + counts['開始加碼']} 檔
 <em>·</em> 低部位觀察 {counts['低部位觀察']} 檔
+<em>·</em> 待觀察 {counts['待觀察']} 檔
 <em>·</em> 資料發佈 {esc(published)}</p><div class="tabrow">{navigation}</div></header>
-<section class="panel"><p class="note">主動式 ETF 持有低部位、且非連續賣出殘留的個股，由強至弱排序：<b>跨投信共振</b> → <b>確認布局</b> → <b>開始加碼</b> → <b>低部位觀察</b>。「ETF/投信」只計入當前訊號貢獻者，同一家投信旗下多檔只算一家。點列展開查看完整判定。本頁不使用、也不影響雙模型的 100 分評分與硬門檻。</p>
-<p class="legend"><span>▲ 加碼轉向</span><span>● 低部位</span><span>數字＝目前持有張數</span><span>— 未納入當前訊號</span><span>缺＝資料不足</span><span>張數只供閱讀；訊號以個股權重計算</span><span>統一 981A・403A｜復華 991A｜群益 982A・992A</span></p>
+<section class="panel"><p class="note">主動式 ETF 持有低部位、且非連續賣出殘留的個股，由強至弱排序：<b>跨投信共振</b> → <b>確認布局</b> → <b>開始加碼</b> → <b>低部位觀察</b> → <b>待觀察</b>。冷啟動期間先顯示單日低部位，但不產生加碼或共振訊號。「ETF/投信」只計入當前訊號貢獻者，同一家投信旗下多檔只算一家。點列展開查看完整判定。本頁不使用、也不影響雙模型的 100 分評分與硬門檻。</p>
+<p class="legend"><span>▲ 加碼轉向</span><span>● 低部位／待觀察</span><span>數字＝目前持有張數</span><span>— 未納入當前訊號</span><span>缺＝官網資料缺失</span><span>張數只供閱讀；訊號以個股權重計算</span><span>統一 981A・403A｜復華 991A｜群益 982A・992A</span></p>
 {table}{_excluded(result)}
 <div class="audit"><h2>規則與定位</h2>
 <p class="foot"><b>低部位</b>　佔基金淨值 ≤ 0.15%、為 1,000 股整數倍，且未觸發最近 4 日至少 3 日減碼或 5 日權重減少 30%。個股權重而非股數用於判定，避免把 ETF 申購贖回誤認為經理人加碼。</p>
+<p class="foot"><b>冷啟動待觀察</b>　前 6 份快照先顯示當日低部位與整張數標的，但尚未完成連續減碼排除，不列為開始加碼、確認布局或跨投信共振。</p>
 <p class="foot"><b>投信去重</b>　統一旗下 00981A／00403A、群益旗下 00982A／00992A 各併計為一家；跨投信才視為獨立確認。</p>
 <p class="foot"><b>雷達權重 {esc(meta['weight_version'])}</b>　{esc(weight_text)}。依近 20 個交易日 AUM 中位數平方根正規化，只用於同級排序，不是分數。{esc(provisional)}</p>
 <p class="foot"><b>更新與時效</b>　每個交易日盤後擷取官方完整投資組合，建議於次日上午 08:00–08:30 閱讀。PCF 為 T 日盤後揭露，本頁最快只能在 T+1 跟進 T 日動作；來源缺失時顯示「缺」，不沿用舊值。</p>

@@ -295,6 +295,7 @@ def parse_unified_html(source: ETFSource, raw_html: str) -> dict[str, Any]:
         )
         if not nav or not stocks:
             raise ValueError("embedded portfolio is missing NAV or stock assets")
+        aum = float(nav.get("Value") or 0.0)
         details = stocks.get("Details") or []
         positions = _validate_positions(
             [
@@ -302,7 +303,14 @@ def parse_unified_html(source: ETFSource, raw_html: str) -> dict[str, Any]:
                     "stock_id": str(item.get("DetailCode") or "").strip(),
                     "stock_name": str(item.get("DetailName") or "").strip(),
                     "shares": int(float(item.get("Share") or 0)),
-                    "weight": float(item.get("NavRate") or 0.0) / 100.0,
+                    # NavRate is rounded to two decimals and turns genuine tiny
+                    # holdings into 0.00%.  Amount / NAV retains the official
+                    # data while recovering the precision needed by the radar.
+                    "weight": (
+                        float(item.get("Amount") or 0.0) / aum
+                        if aum > 0 and float(item.get("Amount") or 0.0) > 0
+                        else float(item.get("NavRate") or 0.0) / 100.0
+                    ),
                 }
                 for item in details
                 if re.fullmatch(r"\d{4}", str(item.get("DetailCode") or "").strip())
@@ -316,7 +324,7 @@ def parse_unified_html(source: ETFSource, raw_html: str) -> dict[str, Any]:
             source,
             raw_html,
             data_date=match.group(1),
-            aum=float(nav.get("Value") or 0.0),
+            aum=aum,
             positions=positions,
         )
 
@@ -461,7 +469,11 @@ def parse_fuhwa_xlsx(source: ETFSource, raw_xlsx: bytes) -> dict[str, Any]:
                     "stock_id": row[0].strip(),
                     "stock_name": row[1].strip(),
                     "shares": _integer(row[2]),
-                    "weight": _weight(row[4]),
+                    "weight": (
+                        float(row[3].replace(",", "")) / aum
+                        if aum > 0 and row[3].replace(",", "").strip()
+                        else _weight(row[4])
+                    ),
                 }
             )
         except ValueError:

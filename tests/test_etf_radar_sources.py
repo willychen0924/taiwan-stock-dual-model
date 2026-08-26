@@ -105,6 +105,9 @@ class ETFRadarSourceTests(unittest.TestCase):
                 ],
             },
         ]
+        # The live page rounds NavRate to 0.00 for genuine tiny holdings.
+        assets[1]["Details"][2]["NavRate"] = 0.0
+        assets[1]["Details"][2]["Amount"] = 10_000_000
         raw_html = (
             '<div id="DataAsset" data-content="'
             + html.escape(json.dumps(assets, ensure_ascii=False), quote=True)
