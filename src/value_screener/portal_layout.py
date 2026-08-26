@@ -171,7 +171,7 @@ body{{margin:0;background:var(--page);color:var(--ink);font-size:13px;
 
 .period-nav{{display:inline-flex;gap:2px;background:var(--tint);padding:3px;
  border-radius:999px;flex:none}}
-/* 尺寸與模型分頁一致，緊鄰其右；選中樣式刻意不同，區分主要動作與次要導覽 */
+/* 尺寸與模型分頁一致；報表導覽固定在左，跨頁時不會橫向跳動。 */
 .period-link{{padding:8px 20px;border-radius:999px;font-size:14.5px;text-decoration:none;
  color:var(--ink2);font-weight:600;white-space:nowrap;transition:background .15s,color .15s}}
 a.period-link:hover{{background:var(--tinth);color:var(--active)}}

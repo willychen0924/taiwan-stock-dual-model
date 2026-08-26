@@ -223,6 +223,11 @@ class CombinedReportTests(unittest.TestCase):
         self.assertNotIn('href="../weekly/latest/index.html"', disabled)
         self.assertIn('href="../weekly/latest/index.html"', enabled)
 
+    def test_report_navigation_stays_left_of_model_tabs(self) -> None:
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        tabrow = page[page.index('<div class="tabrow">'):page.index("</header>")]
+        self.assertLess(tabrow.index('class="period-nav"'), tabrow.index('class="tabs"'))
+
 
 if __name__ == "__main__":
     unittest.main()

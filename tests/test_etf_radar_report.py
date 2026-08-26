@@ -44,6 +44,27 @@ class ETFRadarReportTests(unittest.TestCase):
             published_at=datetime.fromisoformat("2026-08-26T08:25:00+08:00"),
         )
 
+    def _many_candidates_page(self) -> str:
+        days = _days({})[:1]
+        for index in range(16):
+            days[0]["snapshots"]["00981A"]["positions"].append(
+                {
+                    "stock_id": f"{1000 + index}",
+                    "stock_name": f"候選{index}",
+                    "shares": 1000,
+                    "weight": 0.001,
+                }
+            )
+        result = build_radar_result(
+            days,
+            CONFIG,
+            weights=WEIGHTS,
+            weight_version="2026-08",
+            aum_medians={code: 1.0 for code in WEIGHTS},
+            provisional_weights=True,
+        )
+        return build_etf_radar_html(result)
+
     def test_report_keeps_existing_style_and_has_no_javascript(self) -> None:
         page = self._page()
         self.assertIn("--page:#faf6ef", page)
@@ -68,6 +89,13 @@ class ETFRadarReportTests(unittest.TestCase):
         self.assertIn('<i class="mark">●</i>1', page)
         self.assertNotIn('<i class="mark">▲</i>1', page)
         self.assertIn("尚無法完成連續減碼尾倉檢查", page)
+
+    def test_page_shows_ten_and_keeps_only_fifteen_candidates(self) -> None:
+        page = self._many_candidates_page()
+        primary, extra = page.split('<details class="watchlist">', 1)
+        self.assertEqual(primary.count('class="lrow '), 10)
+        self.assertEqual(extra.count('class="lrow '), 5)
+        self.assertIn("單日符合 16 檔，候選只取排名前 15 檔", page)
 
     def test_missing_uses_word_not_question_mark(self) -> None:
         page = self._page()

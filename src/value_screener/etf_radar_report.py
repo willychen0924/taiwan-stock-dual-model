@@ -234,7 +234,7 @@ def build_etf_radar_html(
     watch_signals = {"低部位觀察", "待觀察"}
     active_rows = [row for row in result["rows"] if row["signal"] not in watch_signals]
     low_rows = [row for row in result["rows"] if row["signal"] in watch_signals]
-    low_limit = 20
+    low_limit = int(meta.get("primary_observation_limit") or 10)
     primary_rows = active_rows + low_rows[:low_limit]
     extra_low = low_rows[low_limit:]
     table = _listing(primary_rows, codes)
@@ -262,6 +262,13 @@ def build_etf_radar_html(
         f'{code} {_percent(meta["weights"].get(code), 1)}' for code in codes
     )
     provisional = "（暫定；尚未累積滿 20 個交易日）" if meta.get("weights_provisional") else ""
+    pool_count = int(meta.get("observation_pool_count") or len(low_rows))
+    candidate_limit = int(meta.get("observation_candidate_limit") or 15)
+    pool_text = (
+        f'<span>單日符合 {pool_count} 檔，候選只取排名前 {candidate_limit} 檔</span>'
+        if int(meta.get("observation_omitted_count") or 0) > 0
+        else ""
+    )
     css = portal_css() + _extra_css()
     return f"""<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -276,7 +283,7 @@ def build_etf_radar_html(
 <em>·</em> 待觀察 {counts['待觀察']} 檔
 <em>·</em> 資料發佈 {esc(published)}</p><div class="tabrow">{navigation}</div></header>
 <section class="panel"><p class="note">主動式 ETF 持有低部位、且非連續賣出殘留的個股，由強至弱排序：<b>跨投信共振</b> → <b>確認布局</b> → <b>開始加碼</b> → <b>低部位觀察</b> → <b>待觀察</b>。冷啟動期間先顯示單日低部位，但不產生加碼或共振訊號。「ETF/投信」只計入當前訊號貢獻者，同一家投信旗下多檔只算一家。點列展開查看完整判定。本頁不使用、也不影響雙模型的 100 分評分與硬門檻。</p>
-<p class="legend"><span>▲ 加碼轉向</span><span>● 低部位／待觀察</span><span>數字＝目前持有張數</span><span>— 未納入當前訊號</span><span>缺＝官網資料缺失</span><span>張數只供閱讀；訊號以個股權重計算</span><span>統一 981A・403A｜復華 991A｜群益 982A・992A</span></p>
+<p class="legend"><span>▲ 加碼轉向</span><span>● 低部位／待觀察</span><span>數字＝目前持有張數</span><span>— 未納入當前訊號</span><span>缺＝官網資料缺失</span><span>排序：ETF 檔數 → 雷達權重合計 → 投信數</span>{pool_text}<span>張數只供閱讀；訊號以個股權重計算</span><span>統一 981A・403A｜復華 991A｜群益 982A・992A</span></p>
 {table}{_excluded(result)}
 <div class="audit"><h2>規則與定位</h2>
 <p class="foot"><b>低部位</b>　佔基金淨值 ≤ 0.15%、為 1,000 股整數倍，且未觸發最近 4 日至少 3 日減碼或 5 日權重減少 30%。個股權重而非股數用於判定，避免把 ETF 申購贖回誤認為經理人加碼。</p>

@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "low_position_max_weight": 0.0015,
   "require_round_lot": true,
   "exclude_decline_days": {
@@ -12,5 +12,6 @@
   "resonance_window_days": 3,
   "resonance_min_issuers": 2,
   "warmup_trading_days": 6,
-  "low_observation_limit": 20
+  "low_observation_limit": 10,
+  "observation_candidate_limit": 15
 }

@@ -307,12 +307,12 @@ def build_combined_html(
     <em>·</em> 資料發佈 {esc(published_text)}
   </p>
   <div class="tabrow">
+    {navigation}
     <div class="tabs">
       <label for="t-momentum">營運動能</label>
       <label for="t-value">防禦價值</label>
       <label for="t-inter">總覽</label>
     </div>
-    {navigation}
   </div>
 </header>
 

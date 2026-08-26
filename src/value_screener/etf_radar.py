@@ -588,12 +588,18 @@ def build_radar_result(
     rows.sort(
         key=lambda row: (
             SIGNAL_ORDER[row["signal"]],
+            -row["etf_count"],
             -row["radar_weight_sum"],
             -row["issuer_count"],
             row["low_start"] or "9999-99-99",
             row["stock_id"],
         )
     )
+    watch_signals = {"低部位觀察", "待觀察"}
+    observation_rows = [row for row in rows if row["signal"] in watch_signals]
+    active_rows = [row for row in rows if row["signal"] not in watch_signals]
+    candidate_limit = int(config.get("observation_candidate_limit", 15))
+    rows = active_rows + observation_rows[:candidate_limit]
     excluded.sort(key=lambda row: (row["reasons"], row["stock_id"]))
     latest = days[-1]
     code_order = sorted(codes, key=lambda code: (-weights.get(code, 0.0), code))
@@ -604,6 +610,10 @@ def build_radar_result(
             "coverage": latest.get("coverage"),
             "history_days": len(days),
             "warmup_trading_days": int(config["warmup_trading_days"]),
+            "primary_observation_limit": int(config.get("low_observation_limit", 10)),
+            "observation_candidate_limit": candidate_limit,
+            "observation_pool_count": len(observation_rows),
+            "observation_omitted_count": max(0, len(observation_rows) - candidate_limit),
             "config_version": config["version"],
             "weight_version": weight_version,
             "weights_provisional": provisional_weights,

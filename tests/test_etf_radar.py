@@ -24,6 +24,8 @@ CONFIG = {
     "resonance_window_days": 3,
     "resonance_min_issuers": 2,
     "warmup_trading_days": 6,
+    "low_observation_limit": 10,
+    "observation_candidate_limit": 15,
 }
 WEIGHTS = {"00981A": 0.32, "00403A": 0.247, "00991A": 0.175, "00982A": 0.134, "00992A": 0.124}
 
@@ -70,6 +72,40 @@ def _build(series: dict[str, list[float]], *, missing_last: set[str] | None = No
 
 
 class ETFRadarSignalTests(unittest.TestCase):
+    def test_waiting_candidates_are_ranked_by_etf_count_and_capped_at_fifteen(self) -> None:
+        days = _days({})[:1]
+        for index in range(16):
+            days[0]["snapshots"]["00981A"]["positions"].append(
+                {
+                    "stock_id": f"{1000 + index}",
+                    "stock_name": f"候選{index}",
+                    "shares": 1000,
+                    "weight": 0.001,
+                }
+            )
+        for code in ("00982A", "00992A"):
+            days[0]["snapshots"][code]["positions"].append(
+                {
+                    "stock_id": "9000",
+                    "stock_name": "雙ETF候選",
+                    "shares": 1000,
+                    "weight": 0.001,
+                }
+            )
+        result = build_radar_result(
+            days,
+            CONFIG,
+            weights=WEIGHTS,
+            weight_version="test",
+            aum_medians={code: 1.0 for code in WEIGHTS},
+            provisional_weights=True,
+        )
+        self.assertEqual(len(result["rows"]), 15)
+        self.assertEqual(result["rows"][0]["stock_id"], "9000")
+        self.assertEqual(result["rows"][0]["etf_count"], 2)
+        self.assertEqual(result["metadata"]["observation_pool_count"], 17)
+        self.assertEqual(result["metadata"]["observation_omitted_count"], 2)
+
     def test_cold_start_shows_low_position_as_waiting_without_event(self) -> None:
         days = _days({"00981A": [0.001] * 7})[:1]
         result = build_radar_result(
