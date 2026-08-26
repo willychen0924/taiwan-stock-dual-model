@@ -138,6 +138,8 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn('▼ 下降最多', page)
         self.assertNotIn("期初至期末淨進出", page)
         self.assertIn("不是買進建議", page)
+        tabrow = page[page.index('<div class="tabrow">'):page.index("</header>")]
+        self.assertLess(tabrow.index('class="period-nav"'), tabrow.index('class="tabs"'))
         self.assertLess(page.index(">ETF雷達</"), page.index(">日報</"))
         self.assertIn('href="../../etf_radar/latest/index.html"', page)
         self.assertIn('aria-current="page">週報</a>', page)
