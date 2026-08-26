@@ -107,6 +107,33 @@ class ETFRadarReportTests(unittest.TestCase):
         self.assertIn('<td class="neu">—</td><td>未持有</td>', page)
         self.assertNotIn('>資料不足</td><td>未持有</td>', page)
 
+    def test_etf_issuer_count_includes_history_short_low_holdings(self) -> None:
+        days = _days({"00991A": [0.001] * 7})
+        for day in days[:-1]:
+            for code in ("00981A", "00403A"):
+                day["snapshots"][code]["status"] = "missing"
+                day["snapshots"][code]["positions"] = []
+        for code in ("00981A", "00403A"):
+            days[-1]["snapshots"][code]["positions"] = [
+                {
+                    "stock_id": "4958",
+                    "stock_name": "臻鼎-KY",
+                    "shares": 1000,
+                    "weight": 0.001,
+                }
+            ]
+        result = build_radar_result(
+            days,
+            CONFIG,
+            weights=WEIGHTS,
+            weight_version="2026-08",
+            aum_medians={code: 1.0 for code in WEIGHTS},
+            provisional_weights=True,
+        )
+        page = build_etf_radar_html(result)
+        self.assertIn('<span class="split">3<s>/</s>2</span>', page)
+        self.assertIn("歷史不足的少量持有", page)
+
     def test_radar_is_explicitly_separate_from_score_and_hard_gates(self) -> None:
         page = self._page()
         self.assertIn("不使用、也不影響雙模型的 100 分評分與硬門檻", page)

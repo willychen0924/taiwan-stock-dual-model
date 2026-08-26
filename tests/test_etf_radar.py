@@ -192,6 +192,36 @@ class ETFRadarSignalTests(unittest.TestCase):
         self.assertEqual(row["cells"]["00992A"]["text"], "缺")
         self.assertNotIn("00992A", row["contributors"])
 
+    def test_history_short_low_holdings_are_included_in_etf_and_issuer_counts(self) -> None:
+        days = _days({"00991A": [0.001] * 7})
+        for day in days[:-1]:
+            for code in ("00981A", "00403A"):
+                day["snapshots"][code]["status"] = "missing"
+                day["snapshots"][code]["positions"] = []
+        for code in ("00981A", "00403A"):
+            days[-1]["snapshots"][code]["positions"] = [
+                {
+                    "stock_id": "4958",
+                    "stock_name": "臻鼎-KY",
+                    "shares": 1000,
+                    "weight": 0.001,
+                }
+            ]
+        result = build_radar_result(
+            days,
+            CONFIG,
+            weights=WEIGHTS,
+            weight_version="test",
+            aum_medians={code: 1.0 for code in WEIGHTS},
+            provisional_weights=True,
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["contributors"], ["00991A"])
+        self.assertEqual(row["signal_etf_count"], 1)
+        self.assertEqual(row["signal_issuer_count"], 1)
+        self.assertEqual(row["etf_count"], 3)
+        self.assertEqual(row["issuer_count"], 2)
+
 
 class ETFRadarBackfillTests(unittest.TestCase):
     @staticmethod

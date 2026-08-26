@@ -706,7 +706,12 @@ def build_radar_result(
             contributors = []
 
         if signal:
-            issuers = {issuer_by_code[code] for code in contributors}
+            contributor_issuers = {issuer_by_code[code] for code in contributors}
+            radar_holding_states = {"cold_low", "low", "stopped", "start", "confirm", "post_turn"}
+            radar_holding_codes = [
+                code for code, point in current.items() if point["state"] in radar_holding_states
+            ]
+            radar_holding_issuers = {issuer_by_code[code] for code in radar_holding_codes}
             detail = []
             for code in codes:
                 point = current[code]
@@ -733,9 +738,13 @@ def build_radar_result(
                     "stock_id": stock_id,
                     "stock_name": meta.get("stock_name") or names.get(stock_id) or stock_id,
                     "contributors": contributors,
-                    "etf_count": len(contributors),
-                    "issuer_count": len(issuers),
-                    "radar_weight_sum": sum(weights.get(code, 0.0) for code in contributors),
+                    "signal_etf_count": len(contributors),
+                    "signal_issuer_count": len(contributor_issuers),
+                    "etf_count": len(radar_holding_codes),
+                    "issuer_count": len(radar_holding_issuers),
+                    "radar_weight_sum": sum(
+                        weights.get(code, 0.0) for code in radar_holding_codes
+                    ),
                     "low_start": min(low_dates) if low_dates else "",
                     "last_turn": max(event_dates) if event_dates else "",
                     "close": meta.get("close"),

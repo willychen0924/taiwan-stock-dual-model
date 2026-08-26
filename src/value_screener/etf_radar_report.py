@@ -67,7 +67,8 @@ def _judgement(row: dict[str, Any]) -> str:
     if row["signal"] == "跨投信共振":
         return (
             f'{esc(contributors)} 在最近 3 個交易日內由低部位轉向加碼，去重後來自 '
-            f'{row["issuer_count"]} 家投信，因此形成跨投信共振。ETF／投信只計入事件貢獻者。'
+            f'{row["signal_issuer_count"]} 家投信，因此形成跨投信共振。'
+            "ETF／投信欄計入目前符合低部位雷達的持有，包含歷史不足的少量部位。"
         )
     if row["signal"] == "確認布局":
         return f'{esc(contributors)} 承接前一交易日的開始加碼，個股權重再次提高，列為確認布局。'
@@ -80,7 +81,7 @@ def _judgement(row: dict[str, Any]) -> str:
         )
     return (
         f'{esc(contributors)} 通過低部位、整張數與非連續減碼檢查；目前尚未出現加碼轉向。'
-        "同一家投信旗下多檔仍只算一家。"
+        "ETF／投信欄仍計入其他歷史不足的少量持有；同一家投信旗下多檔只算一家。"
     )
 
 
@@ -318,7 +319,7 @@ def build_etf_radar_html(
 <em>·</em> 低部位觀察 {counts['低部位觀察']} 檔
 <em>·</em> 待觀察 {counts['待觀察']} 檔
 <em>·</em> 資料發佈 {esc(published)}</p><div class="tabrow">{navigation}</div></header>
-<section class="panel"><p class="note">主動式 ETF 持有低部位、且非連續賣出殘留的個股，由強至弱排序：<b>跨投信共振</b> → <b>確認布局</b> → <b>開始加碼</b> → <b>低部位觀察</b> → <b>待觀察</b>。冷啟動期間先顯示單日低部位，但不產生加碼或共振訊號。「ETF/投信」只計入當前訊號貢獻者，同一家投信旗下多檔只算一家。點列展開查看完整判定。本頁不使用、也不影響雙模型的 100 分評分與硬門檻。</p>
+<section class="panel"><p class="note">主動式 ETF 持有低部位、且非連續賣出殘留的個股，由強至弱排序：<b>跨投信共振</b> → <b>確認布局</b> → <b>開始加碼</b> → <b>低部位觀察</b> → <b>待觀察</b>。冷啟動期間先顯示單日低部位，但不產生加碼或共振訊號。「ETF/投信」計入目前符合低部位雷達的持有，包含歷史不足的少量部位；同一家投信旗下多檔只算一家。點列展開查看完整判定。本頁不使用、也不影響雙模型的 100 分評分與硬門檻。</p>
 <p class="legend"><span>▲ 加碼轉向</span><span>● 低部位／待觀察</span><span>數字＝目前持有張數</span><span>— 未納入當前訊號</span><span>缺＝官網資料缺失</span><span>排序：ETF 檔數 → 雷達權重合計 → 投信數</span>{pool_text}<span>張數只供閱讀；訊號以個股權重計算</span><span>統一 981A・403A｜復華 991A｜群益 982A・992A</span></p>
 {table}{_excluded(result)}
 <div class="audit"><h2>規則與定位</h2>
