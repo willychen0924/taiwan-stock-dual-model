@@ -634,7 +634,16 @@ def load_stock_cross_reference(root: Path) -> dict[str, dict[str, Any]]:
             if not stock_id:
                 continue
             target = output.setdefault(stock_id, {})
-            for key in ("stock_name", "close", "market_value", "avg_daily_turnover"):
+            for key in (
+                "stock_name",
+                "market",
+                "close",
+                "market_value",
+                "avg_daily_turnover",
+                "revenue_period",
+                "latest_revenue_yoy",
+                "revenue_3m_yoy",
+            ):
                 if row.get(key) is not None:
                     target[key] = row[key]
             if row.get("rank") is not None:
@@ -750,6 +759,10 @@ def build_radar_result(
                     "close": meta.get("close"),
                     "market_value": meta.get("market_value"),
                     "avg_daily_turnover": meta.get("avg_daily_turnover"),
+                    "market": meta.get("market"),
+                    "revenue_period": meta.get("revenue_period"),
+                    "latest_revenue_yoy": meta.get("latest_revenue_yoy"),
+                    "revenue_3m_yoy": meta.get("revenue_3m_yoy"),
                     "value_rank": meta.get("value_rank"),
                     "momentum_rank": meta.get("momentum_rank"),
                     "cells": {

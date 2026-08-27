@@ -10,7 +10,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from value_screener.etf_radar import build_radar_result  # noqa: E402
-from value_screener.etf_radar_report import build_etf_radar_html  # noqa: E402
+from value_screener.etf_radar_report import (  # noqa: E402
+    _daily_watch_rows,
+    build_etf_radar_html,
+)
 from tests.test_etf_radar import CONFIG, WEIGHTS, _days  # noqa: E402
 
 
@@ -23,7 +26,17 @@ class ETFRadarReportTests(unittest.TestCase):
             weight_version="2026-08",
             aum_medians={code: 1.0 for code in WEIGHTS},
             provisional_weights=True,
-            cross_reference={"4958": {"stock_name": "臻鼎-KY", "close": 108.5}},
+            cross_reference={
+                "4958": {
+                    "stock_name": "臻鼎-KY",
+                    "close": 108.5,
+                    "value_rank": 70,
+                    "momentum_rank": 40,
+                    "revenue_period": "2026-07",
+                    "latest_revenue_yoy": 0.565,
+                    "revenue_3m_yoy": 0.486,
+                }
+            },
         )
         return build_etf_radar_html(
             result,
@@ -70,6 +83,45 @@ class ETFRadarReportTests(unittest.TestCase):
         self.assertIn("--page:#faf6ef", page)
         self.assertIn('<h1>ETF 雷達</h1>', page)
         self.assertNotIn("<script", page)
+
+    def test_daily_watch_uses_consensus_cross_model_and_revenue_context(self) -> None:
+        page = self._page()
+        self.assertIn("<h2>每日觀察</h2>", page)
+        self.assertIn("觀察理由", page)
+        self.assertIn("等待訊號", page)
+        self.assertIn("防禦價值第 70、營運動能第 40", page)
+        self.assertIn("2026-07 單月營收年增 +56.5%、近三月年增 +48.6%", page)
+        self.assertIn("不是進場訊號或買進建議", page)
+
+    def test_daily_watch_prioritizes_consensus_then_best_cross_model(self) -> None:
+        rows = [
+            {
+                "stock_id": "5347",
+                "signal": "低部位觀察",
+                "etf_count": 3,
+                "issuer_count": 2,
+                "value_rank": 169,
+                "momentum_rank": 208,
+            },
+            {
+                "stock_id": "2382",
+                "signal": "低部位觀察",
+                "etf_count": 2,
+                "issuer_count": 2,
+                "value_rank": None,
+                "momentum_rank": None,
+            },
+            {
+                "stock_id": "3044",
+                "signal": "低部位觀察",
+                "etf_count": 1,
+                "issuer_count": 1,
+                "value_rank": 70,
+                "momentum_rank": 40,
+            },
+        ]
+        selected = _daily_watch_rows(rows)
+        self.assertEqual([row["stock_id"] for row in selected], ["5347", "3044", "2382"])
 
     def test_navigation_places_etf_radar_left_of_daily(self) -> None:
         page = self._page()

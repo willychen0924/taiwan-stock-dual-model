@@ -200,6 +200,196 @@ def _excluded(result: dict[str, Any]) -> str:
     )
 
 
+def _daily_watch_rows(rows: list[dict[str, Any]], limit: int = 3) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    selected_ids: set[str] = set()
+
+    def add(row: dict[str, Any] | None) -> None:
+        if row is None or len(selected) >= limit:
+            return
+        stock_id = str(row.get("stock_id") or "")
+        if not stock_id or stock_id in selected_ids:
+            return
+        selected.append(row)
+        selected_ids.add(stock_id)
+
+    active = [
+        row
+        for row in rows
+        if row.get("signal") not in {"低部位觀察", "待觀察"}
+    ]
+    for row in active:
+        add(row)
+
+    consensus = [
+        row
+        for row in rows
+        if int(row.get("etf_count") or 0) >= 2
+        and int(row.get("issuer_count") or 0) >= 2
+    ]
+    add(consensus[0] if consensus else None)
+
+    order = {str(row.get("stock_id") or ""): index for index, row in enumerate(rows)}
+    cross_model = sorted(
+        (
+            row
+            for row in rows
+            if row.get("value_rank") is not None and row.get("momentum_rank") is not None
+        ),
+        key=lambda row: (
+            int(row["value_rank"]) + int(row["momentum_rank"]),
+            max(int(row["value_rank"]), int(row["momentum_rank"])),
+            order.get(str(row.get("stock_id") or ""), 9999),
+        ),
+    )
+    for row in cross_model:
+        if str(row.get("stock_id") or "") not in selected_ids:
+            add(row)
+            break
+
+    for row in consensus:
+        add(row)
+    for row in rows:
+        add(row)
+    return selected
+
+
+def _watch_reason(row: dict[str, Any]) -> str:
+    parts = [
+        f'{int(row.get("etf_count") or 0)} 檔 ETF、'
+        f'{int(row.get("issuer_count") or 0)} 家投信符合低部位雷達'
+    ]
+    history_short = [
+        str(item["etf_code"])
+        for item in row.get("details", [])
+        if item.get("state") == "cold_low"
+    ]
+    if history_short:
+        parts.append(f'{"、".join(history_short)} 歷史仍不足')
+
+    comparable = [
+        item
+        for item in row.get("details", [])
+        if item.get("contributor") and item.get("pos_5d") is not None
+    ]
+    if comparable:
+        item = max(comparable, key=lambda value: abs(float(value["pos_5d"])))
+        parts.append(
+            f'{item["etf_code"]} 五日標準化部位 {float(item["pos_5d"]):+.1%}'
+        )
+
+    value_rank = row.get("value_rank")
+    momentum_rank = row.get("momentum_rank")
+    if value_rank is not None and momentum_rank is not None:
+        parts.append(f'防禦價值第 {int(value_rank)}、營運動能第 {int(momentum_rank)}')
+    elif value_rank is not None:
+        parts.append(f'防禦價值第 {int(value_rank)}')
+    elif momentum_rank is not None:
+        parts.append(f'營運動能第 {int(momentum_rank)}')
+
+    revenue_period = str(row.get("revenue_period") or "")
+    latest_revenue_yoy = row.get("latest_revenue_yoy")
+    revenue_3m_yoy = row.get("revenue_3m_yoy")
+    if revenue_period and latest_revenue_yoy is not None:
+        revenue_text = f'{revenue_period} 單月營收年增 {float(latest_revenue_yoy):+.1%}'
+        if revenue_3m_yoy is not None:
+            revenue_text += f'、近三月年增 {float(revenue_3m_yoy):+.1%}'
+        parts.append(revenue_text)
+    return "；".join(parts) + "。"
+
+
+def _watch_trigger(row: dict[str, Any]) -> str:
+    signal = str(row.get("signal") or "")
+    contributors = "、".join(str(code) for code in row.get("contributors", [])) or "現有 ETF"
+    if signal == "跨投信共振":
+        return "觀察跨投信加碼是否延續，並避免只看單日變化。"
+    if signal == "確認布局":
+        return "已連續提高部位；繼續確認是否有第二家投信加入。"
+    if signal == "開始加碼":
+        return "等待下一交易日續增，才升級為確認布局。"
+    history_short = [
+        str(item["etf_code"])
+        for item in row.get("details", [])
+        if item.get("state") == "cold_low"
+    ]
+    if history_short:
+        return (
+            f'等待 {"、".join(history_short)} 補足歷史並排除連續減碼；'
+            f'同時觀察 {contributors} 是否轉為明顯加碼。'
+        )
+    return f"等待 {contributors} 由低部位轉為明顯加碼，或出現第二家投信同步。"
+
+
+def _daily_watch(result: dict[str, Any]) -> str:
+    rows = list(result.get("rows") or [])
+    selected = _daily_watch_rows(rows)
+    if not selected:
+        return (
+            '<section class="daily-watch"><div class="dwhead"><h2>每日觀察</h2>'
+            '<span>依 ETF 雷達與雙模型交叉自動整理</span></div>'
+            '<p class="dwempty">目前沒有可列入每日觀察的個股。</p></section>'
+        )
+    body = "".join(
+        "<tr>"
+        f'<td class="dwpriority">{index}</td>'
+        f'<td class="dwstock"><b>{esc(row["stock_name"])}</b><span>{esc(row["stock_id"])}</span></td>'
+        f'<td>{esc(_watch_reason(row))}</td>'
+        f'<td>{esc(_watch_trigger(row))}</td>'
+        "</tr>"
+        for index, row in enumerate(selected, 1)
+    )
+    selected_ids = {str(row.get("stock_id") or "") for row in selected}
+    remaining = [
+        row for row in rows if str(row.get("stock_id") or "") not in selected_ids
+    ]
+    secondary = next(
+        (
+            row
+            for row in remaining
+            if row.get("signal") not in {"低部位觀察", "待觀察"}
+        ),
+        None,
+    )
+    if secondary is None:
+        cross_model = sorted(
+            (
+                row
+                for row in remaining
+                if row.get("value_rank") is not None
+                and row.get("momentum_rank") is not None
+            ),
+            key=lambda row: (
+                int(row["value_rank"]) + int(row["momentum_rank"]),
+                max(int(row["value_rank"]), int(row["momentum_rank"])),
+            ),
+        )
+        secondary = cross_model[0] if cross_model else (remaining[0] if remaining else None)
+    secondary_text = ""
+    if secondary is not None:
+        rank_text = ""
+        if secondary.get("value_rank") is not None and secondary.get("momentum_rank") is not None:
+            rank_text = (
+                f'，防禦價值第 {int(secondary["value_rank"])}、'
+                f'營運動能第 {int(secondary["momentum_rank"])}'
+            )
+        secondary_text = (
+            '<p class="dwnext"><b>次一級觀察</b>　'
+            f'{esc(secondary["stock_name"])}（{esc(secondary["stock_id"])}）：'
+            f'{int(secondary.get("etf_count") or 0)} 檔 ETF／'
+            f'{int(secondary.get("issuer_count") or 0)} 家投信符合低部位雷達'
+            f'{esc(rank_text)}。</p>'
+        )
+    return (
+        '<section class="daily-watch"><div class="dwhead"><h2>每日觀察</h2>'
+        '<span>依持有共識、5 日部位、雙模型與營收資料自動整理</span></div>'
+        '<div class="dwtable"><table><thead><tr><th>優先</th><th>個股</th>'
+        '<th>觀察理由</th><th>等待訊號</th></tr></thead>'
+        f'<tbody>{body}</tbody></table></div>{secondary_text}'
+        '<p class="dwcaution">本區是每日研究清單，不是進場訊號或買進建議；'
+        '正式狀態仍以 ETF 雷達主表為準。</p></section>'
+    )
+
+
 def _extra_css() -> str:
     return """
 .panel{display:block}.lgrid-etf{--cols:98px 50px 88px 56px 56px 56px 56px 56px 68px 72px 72px 60px;--minw:974px}
@@ -219,12 +409,23 @@ def _extra_css() -> str:
 .subt td{padding:6px 0;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
 .subt tr:last-child td{border-bottom:none}.subt td.f{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--link)}
 .subt td.neu{color:var(--muted)}.subt td.hot{color:#b8452a;font-weight:700}
+.daily-watch{margin-bottom:16px;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px -16px rgba(11,11,11,.12)}
+.dwhead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:13px 16px 10px;background:var(--fill);border-bottom:1px solid var(--line2)}
+.dwhead h2{margin:0;font-size:15px;color:var(--ink)}.dwhead span{font-size:11.5px;color:var(--muted)}
+.dwtable{overflow-x:auto}.dwtable table{width:100%;min-width:900px;border-collapse:collapse;font-size:12.5px}
+.dwtable th{padding:8px 12px;text-align:left;font-size:11px;color:var(--ink2);background:var(--surface);border-bottom:1px solid var(--line2);white-space:nowrap}
+.dwtable td{padding:10px 12px;color:var(--ink2);line-height:1.65;vertical-align:top;border-bottom:1px solid var(--tint)}
+.dwtable tr:last-child td{border-bottom:none}.dwtable th:first-child,.dwtable td:first-child{text-align:center;width:52px}
+.dwtable th:nth-child(2),.dwtable td:nth-child(2){width:126px}.dwtable th:last-child,.dwtable td:last-child{width:30%}
+.dwpriority{font-weight:800;color:var(--active)!important;font-size:14px}.dwstock b{display:block;color:var(--ink);font-size:13.5px}.dwstock span{display:block;color:var(--link);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px}
+.dwnext,.dwcaution,.dwempty{margin:0;padding:9px 16px;border-top:1px solid var(--line2);font-size:11.5px;line-height:1.65;color:var(--muted)}
+.dwnext b{color:var(--ink2)}.dwcaution{background:var(--fill)}
 .exbox{margin-top:16px;border:1px solid var(--line2);border-left:3px solid var(--faint);border-radius:6px;background:var(--surface);display:flex;align-items:center;gap:16px;padding:10px 14px}
 .exhead{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
 .exhead h3{margin:0;font-size:13px;color:var(--active);font-weight:600;letter-spacing:.02em}.exhead span{font-size:11.5px;color:#b8452a;font-weight:600;white-space:nowrap}
 .exsummary{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.excat{display:inline-flex;align-items:center;gap:7px;padding:4px 8px;border:1px solid var(--line2);border-radius:999px;background:var(--page);font-size:11.5px;color:var(--ink2)}
 .excat b{font-weight:600}.excat i{font-style:normal;color:#b8452a;font-weight:700;font-variant-numeric:tabular-nums}.exnone{font-size:11.5px;color:var(--muted)}
-@media(max-width:760px){.exbox{align-items:flex-start;flex-direction:column;gap:7px}.exhead{width:100%;justify-content:space-between}}
+@media(max-width:760px){.dwhead{align-items:flex-start;flex-direction:column;gap:3px}.exbox{align-items:flex-start;flex-direction:column;gap:7px}.exhead{width:100%;justify-content:space-between}}
 """
 
 
@@ -327,7 +528,7 @@ def build_etf_radar_html(
 <em>·</em> 低部位觀察 {counts['低部位觀察']} 檔
 <em>·</em> 待觀察 {counts['待觀察']} 檔
 <em>·</em> 資料發佈 {esc(published)}</p><div class="tabrow">{navigation}</div></header>
-<section class="panel"><p class="note">主動式 ETF 持有低部位、且非連續賣出殘留的個股，由強至弱排序：<b>跨投信共振</b> → <b>確認布局</b> → <b>開始加碼</b> → <b>低部位觀察</b> → <b>待觀察</b>。冷啟動期間先顯示單日低部位，但不產生加碼或共振訊號。「ETF/投信」計入目前符合低部位雷達的持有，包含歷史不足的少量部位；同一家投信旗下多檔只算一家。點列展開查看完整判定。本頁不使用、也不影響雙模型的 100 分評分與硬門檻。</p>
+<section class="panel">{_daily_watch(result)}<p class="note">主動式 ETF 持有低部位、且非連續賣出殘留的個股，由強至弱排序：<b>跨投信共振</b> → <b>確認布局</b> → <b>開始加碼</b> → <b>低部位觀察</b> → <b>待觀察</b>。冷啟動期間先顯示單日低部位，但不產生加碼或共振訊號。「ETF/投信」計入目前符合低部位雷達的持有，包含歷史不足的少量部位；同一家投信旗下多檔只算一家。點列展開查看完整判定。本頁不使用、也不影響雙模型的 100 分評分與硬門檻。</p>
 <p class="legend"><span>▲ 加碼轉向</span><span>● 低部位／待觀察</span><span>數字＝目前持有張數</span><span>— 未納入當前訊號</span><span>缺＝官網資料缺失</span><span>排序：ETF 檔數 → 雷達權重合計 → 投信數</span>{pool_text}<span>張數只供閱讀；訊號以個股權重計算</span><span>統一 981A・403A｜復華 991A｜群益 982A・992A</span></p>
 {table}{_excluded(result)}
 <div class="audit"><h2>規則與定位</h2>
