@@ -685,6 +685,7 @@ def build_weekly_html(
         daily_href="../../latest/index.html",
         weekly_href="index.html",
         monthly_href=None,
+        radar_href="../../etf_radar/latest/index.html",
     )
     css = portal_css() + """
 .n,.number{text-align:right;font-variant-numeric:tabular-nums}
@@ -845,12 +846,12 @@ td small{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums}
   <div class="headrow"><h1>台股雙模型週報</h1></div>
   <p class="metaline">市場週 {week_start}～{week_end}<em>·</em>只採用有效且可比較的模型觀測</p>
   <div class="tabrow">
+    {navigation}
     <div class="tabs">
       <label for="w-momentum">營運動能</label>
       <label for="w-value">防禦價值</label>
       <label for="w-overview">總覽</label>
     </div>
-    {navigation}
   </div>
 </header>
 {summary_block}

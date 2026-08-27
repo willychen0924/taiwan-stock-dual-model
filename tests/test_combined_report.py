@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 
@@ -77,6 +78,14 @@ class CombinedReportTests(unittest.TestCase):
         self.assertIn('id="status-momentum"', page)
         self.assertIn("量化排序不是買進建議", page)
 
+    def test_header_shows_taipei_publication_time_to_minute(self) -> None:
+        page = build_combined_html(
+            _result("defensive_value"),
+            _result("operating_momentum"),
+            published_at=datetime.fromisoformat("2026-08-05T08:26:59+08:00"),
+        )
+        self.assertIn("資料發佈 2026-08-05 08:26", page)
+
     def test_tabs_and_row_expansion_work_without_javascript(self) -> None:
         """分頁與逐列展開必須是原生行為：禁用 script 的環境仍要能用。"""
         page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
@@ -98,6 +107,27 @@ class CombinedReportTests(unittest.TestCase):
         self.assertIn(".dwrap{margin:0;padding:3px 16px 7px", page)
         self.assertIn(".lrow>summary:focus:not(:focus-visible){outline:none}", page)
         self.assertIn(".lrow>summary:focus-visible{outline:2px solid var(--link)", page)
+
+    def test_mobile_typography_does_not_expand_inside_wide_tables(self) -> None:
+        """iOS 不得自動放大展開短評；明細須依手機可視寬度換行。"""
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        self.assertIn("html{-webkit-text-size-adjust:100%;text-size-adjust:100%}", page)
+        self.assertIn(
+            ".dwrap{position:sticky;left:0;width:calc(100vw - 26px);"
+            "max-width:calc(100vw - 26px)",
+            page,
+        )
+        self.assertIn(
+            ".drow{grid-template-columns:58px minmax(0,1fr);gap:10px;"
+            "align-items:start",
+            page,
+        )
+        self.assertIn(
+            ".drow dd{font-size:12px;line-height:1.65;overflow-wrap:anywhere;"
+            "word-break:break-word}",
+            page,
+        )
+        self.assertIn(".statusbox .checks{overflow-x:auto;-webkit-overflow-scrolling:touch}", page)
 
     def test_rows_six_to_twenty_expand_to_model_summary_only(self) -> None:
         page = build_combined_html(
@@ -154,6 +184,22 @@ class CombinedReportTests(unittest.TestCase):
         self.assertIn("本次不產生雙模型交集", page)
         self.assertIn("資料不可比", page)
 
+    def test_header_shows_the_revenue_basis_not_just_the_newest_month(self) -> None:
+        """只印最新月份會讓人以為全市場都換月了；實際上多數公司還在前一個月。"""
+        value = _result("defensive_value")
+        value["metadata"]["revenue_period_distribution"] = {"2026-07": 149, "2026-06": 1704}
+        page = build_combined_html(value, _result("operating_momentum"))
+        self.assertIn("營收基準 2026-06（1,704 家）", page)
+        self.assertIn("149 家已採 2026-07", page)
+        self.assertNotIn("營收期 2026-07", page)
+
+    def test_header_omits_the_ahead_clause_when_the_basis_is_uniform(self) -> None:
+        value = _result("defensive_value")
+        value["metadata"]["revenue_period_distribution"] = {"2026-06": 1853}
+        page = build_combined_html(value, _result("operating_momentum"))
+        self.assertIn("營收基準 2026-06（1,853 家）", page)
+        self.assertNotIn("家已採", page)
+
     def test_portal_is_written_only_as_index_html(self) -> None:
         """入口頁只有一個路徑：同內容再存一份 combined_report.html 沒有人連。"""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -176,6 +222,11 @@ class CombinedReportTests(unittest.TestCase):
         )
         self.assertNotIn('href="../weekly/latest/index.html"', disabled)
         self.assertIn('href="../weekly/latest/index.html"', enabled)
+
+    def test_report_navigation_stays_left_of_model_tabs(self) -> None:
+        page = build_combined_html(_result("defensive_value"), _result("operating_momentum"))
+        tabrow = page[page.index('<div class="tabrow">'):page.index("</header>")]
+        self.assertLess(tabrow.index('class="period-nav"'), tabrow.index('class="tabs"'))
 
 
 if __name__ == "__main__":

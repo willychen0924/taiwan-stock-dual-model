@@ -17,6 +17,7 @@ NODE_BIN="${NODE_BIN:-$DEFAULT_NODE}"
 cd "$ROOT"
 "$PYTHON_BIN" scripts/run_screen.py --as-of "$AS_OF" "$@"
 "$PYTHON_BIN" scripts/update_rankings_history.py
+"$PYTHON_BIN" scripts/build_etf_radar.py --as-of "$AS_OF"
 if ! "$PYTHON_BIN" scripts/build_technical_chip_enrichment.py --as-of "$AS_OF" --top-n 5; then
   print -u2 "警告：技術面／籌碼面更新失敗；基本面模型與排名歷史已完成，報表將顯示既有資料或 —。"
 fi
@@ -42,6 +43,12 @@ if (( EXCEL_AVAILABLE )); then
 fi
 
 "$PYTHON_BIN" scripts/cleanup_old_reports.py --as-of "$AS_OF"
+
+if [[ "${PUBLISH_GITHUB_PAGES:-1}" != "0" ]]; then
+  if ! zsh scripts/publish_github_pages.sh "$AS_OF"; then
+    print -u2 "警告：GitHub Pages 發布失敗；本機報表與排名歷史仍已完成。"
+  fi
+fi
 
 print "完成：reports/latest 與 reports/momentum/latest 的 JSON、CSV、HTML"
 if (( EXCEL_AVAILABLE )); then

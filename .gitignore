@@ -9,6 +9,8 @@ node_modules
 data/raw/
 data/cache/
 data/processed/enrichment/
+data/processed/etf_radar/
+data/processed/etf_radar_history.jsonl
 reports/
 outputs/
 qa/

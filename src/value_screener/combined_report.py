@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import html
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .portal_layout import (
     SCORE_COLORS,
@@ -145,6 +147,29 @@ def _listing(head: list[tuple[str, str]], grid_class: str, body: str) -> str:
     return f'<div class="listwrap">{head_row(head, grid_class)}{body}</div>'
 
 
+def _revenue_basis_text(meta: dict[str, Any]) -> str:
+    """營收基準期與「已公布但尚未成為基準」的家數。
+
+    每家公司各自取能算完整 3 個月的最新月份，所以全市場同時存在多個營收期。
+    只印最新的那個月份會讓人以為全市場都換月了——實際上那可能只有一成不到的
+    公司。這裡印出佔多數的基準期，再把跑在前面的家數獨立標示。
+    """
+
+    distribution = meta.get("revenue_period_distribution") or {}
+    if not distribution:
+        return esc(meta.get("latest_revenue_period"))
+    counts = {str(period): int(count) for period, count in distribution.items() if period}
+    if not counts:
+        return esc(meta.get("latest_revenue_period"))
+    basis = max(counts, key=lambda period: (counts[period], period))
+    ahead = sum(count for period, count in counts.items() if period > basis)
+    text = f"營收基準 {basis}（{counts[basis]:,} 家）"
+    if ahead:
+        newest = max(period for period in counts if period > basis)
+        text += f" · {ahead:,} 家已採 {newest}"
+    return esc(text)
+
+
 def build_combined_html(
     value_result: dict[str, Any],
     momentum_result: dict[str, Any],
@@ -152,6 +177,7 @@ def build_combined_html(
     enrichment: dict[str, dict[str, str]] | None = None,
     history_path: Path | None = None,
     weekly_available: bool = False,
+    published_at: datetime | None = None,
 ) -> str:
     enrichment = enrichment or {}
     value_meta = value_result["metadata"]
@@ -248,7 +274,10 @@ def build_combined_html(
         daily_href="index.html",
         weekly_href="../weekly/latest/index.html" if weekly_available else None,
         monthly_href=None,
+        radar_href="../etf_radar/latest/index.html",
     )
+    published_at = published_at or datetime.now(ZoneInfo("Asia/Taipei"))
+    published_text = published_at.astimezone(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M")
 
     def watchlist(rest: list[dict[str, Any]], label: str, body: str) -> str:
         if not rest:
@@ -274,15 +303,16 @@ def build_combined_html(
     <span class="statusdot {overall.lower()}"></span>{esc(overall)}
     <em>·</em> 市場日 {esc(value_meta.get('latest_market_date'))}
     <em>·</em> 財報季 {esc(value_meta.get('latest_financial_quarter'))}
-    <em>·</em> 營收期 {esc(value_meta.get('latest_revenue_period'))}
+    <em>·</em> {_revenue_basis_text(value_meta)}
+    <em>·</em> 資料發佈 {esc(published_text)}
   </p>
   <div class="tabrow">
+    {navigation}
     <div class="tabs">
       <label for="t-momentum">營運動能</label>
       <label for="t-value">防禦價值</label>
       <label for="t-inter">總覽</label>
     </div>
-    {navigation}
   </div>
 </header>
 
